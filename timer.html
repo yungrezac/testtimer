@@ -17,10 +17,8 @@
         body { background-color: transparent !important; color: #f8fafc; overflow: hidden; margin: 0; padding: 0;}
         
         @keyframes floatUpFade { 0% { transform: translate(-50%, 50px) scale(0.5); opacity: 0; } 15% { transform: translate(-50%, -10px) scale(1.2); opacity: 1; } 80% { transform: translate(-50%, -60px) scale(1); opacity: 1; } 100% { transform: translate(-50%, -100px) scale(0.8); opacity: 0; } }
-        .float-up-anim { animation: floatUpFade 2s ease-out forwards; position: absolute; left: 50%; }
+        .float-up-anim { animation: floatUpFade 2.5s ease-out forwards; position: absolute; left: 50%; }
 
-        @keyframes snowTwinkle { 0%, 100% { opacity: 0.2; transform: scale(0.8) rotate(0deg); filter: drop-shadow(0 0 5px rgba(255,255,255,0.5)); } 50% { opacity: 0.9; transform: scale(1.2) rotate(45deg); filter: drop-shadow(0 0 20px rgba(255,255,255,1)); } }
-        .snow-twinkle { animation: snowTwinkle var(--duration, 3s) infinite ease-in-out; animation-delay: var(--delay, 0s); }
         .bonus-pop { animation: floatUpFade 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
     </style>
 </head>
@@ -49,7 +47,7 @@
         };
 
         function TimerView() {
-            const [state, setState] = useState({ timeLeft: 0, isVictory: false, isBonusPhase: false, isRollingBonus: false, multiplier: { isActive: false }, isFrozen: false, freezeTimeLeft: 0 });
+            const [state, setState] = useState({ timeLeft: 0, isVictory: false, isBonusPhase: false, isRollingBonus: false, multiplier: { isActive: false } });
             const [alerts, setAlerts] = useState([]); const [config, setConfig] = useState({});
 
             useEffect(() => {
@@ -62,11 +60,9 @@
                 socket.on('new-alert', data => {
                     const id = Date.now() + Math.random();
                     let text = data.isSpecial ? data.giftName : null;
-                    if (data.type === 'freeze') text = '❄️ ЗАМОРОЗКА!';
-                    if (data.type === 'unfreeze') text = '🔥 РАЗМОРОЗКА!';
                     if (data.type === 'like' || data.type === 'follow') text = data.giftName || null;
                     setAlerts(prev => [...prev, { id, amount: data.timeAdded, text: text, type: data.type }]);
-                    setTimeout(() => setAlerts(prev => prev.filter(n => n.id !== id)), 2000);
+                    setTimeout(() => setAlerts(prev => prev.filter(n => n.id !== id)), 2500);
                 });
                 return () => { socket.off('settings-updated'); socket.off('timer-tick'); socket.off('new-alert'); };
             }, []);
@@ -77,16 +73,14 @@
             
             let colorStr = baseColor; let glowStr = getStroke(true, enableStroke, `0px 10px 40px ${hexToRgba(colorStr, glowIntensity)}, 0px 0px 60px ${hexToRgba(colorStr, glowIntensity * 0.75)}`);
 
-            if (state.isFrozen) { colorStr = '#38bdf8'; glowStr = getStroke(true, enableStroke, `0px 10px 40px ${hexToRgba(colorStr, glowIntensity)}, 0px 0px 60px ${hexToRgba(colorStr, glowIntensity * 0.75)}`); } 
-            else if (state.multiplier?.isActive) { colorStr = state.multiplier.type === 'buff' ? (styles.buffColor || '#34d399') : (styles.debuffColor || '#f43f5e'); glowStr = getStroke(true, enableStroke, `0px 10px 40px ${hexToRgba(colorStr, glowIntensity)}, 0px 0px 60px ${hexToRgba(colorStr, glowIntensity * 0.75)}`); } 
+            if (state.multiplier?.isActive) { colorStr = state.multiplier.type === 'buff' ? (styles.buffColor || '#34d399') : (styles.debuffColor || '#f43f5e'); glowStr = getStroke(true, enableStroke, `0px 10px 40px ${hexToRgba(colorStr, glowIntensity)}, 0px 0px 60px ${hexToRgba(colorStr, glowIntensity * 0.75)}`); } 
             else if (state.timeLeft > 0 && state.timeLeft <= 300) { colorStr = '#ef4444'; glowStr = getStroke(true, enableStroke, `0px 10px 40px ${hexToRgba(colorStr, glowIntensity)}, 0px 0px 60px ${hexToRgba(colorStr, glowIntensity * 0.75)}`); }
 
-            // Выбор цвета для уведомления в зависимости от его типа
             const getAlertColor = (type, amount) => {
                 if (type === 'like') return (styles.likeAlertColor || '#f43f5e');
                 if (type === 'follow') return (styles.followAlertColor || '#34d399');
-                if (amount > 0) return (styles.floatPlusColor || '#34d399');
-                if (amount < 0) return (styles.floatMinusColor || '#f87171');
+                if (amount < 0) return (styles.floatMinusColor || '#ef4444'); // Красный для минуса
+                if (amount > 0) return (styles.floatPlusColor || '#22c55e'); // Зеленый для плюса
                 return '#fbbf24';
             };
 
@@ -96,7 +90,7 @@
                         
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30">
                             {alerts.map(num => (
-                                <div key={num.id} className="float-up-anim font-black whitespace-nowrap" style={{ fontSize: `7.7rem`, color: getAlertColor(num.type, num.amount), textShadow: getStroke(false, enableStroke, '0px 5px 20px rgba(0,0,0,0.9)') }}>
+                                <div key={num.id} className="float-up-anim font-black whitespace-nowrap drop-shadow-2xl" style={{ fontSize: `8rem`, color: getAlertColor(num.type, num.amount), textShadow: getStroke(true, enableStroke, '0px 5px 20px rgba(0,0,0,0.9)') }}>
                                     {num.text ? num.text : `${num.amount > 0 ? '+' : ''}${num.amount} сек`}
                                 </div>
                             ))}
@@ -106,29 +100,16 @@
                             <h1 className="font-black text-green-400 leading-none drop-shadow-2xl bonus-pop" style={{ fontSize: `11.9rem`, textShadow: getStroke(true, enableStroke, '0 10px 40px rgba(34,197,94,0.6)') }}>ПОБЕДА</h1>
                         ) : (
                             <div className="relative flex flex-col items-center justify-center w-full">
-                                {state.isFrozen && (
-                                    <div className="absolute inset-0 pointer-events-none z-20">
-                                        <div className="absolute top-1/2 left-1/2" style={{ transform: 'translate(-250px, -100px)' }}><i className="fa-solid fa-snowflake snow-twinkle text-cyan-200" style={{ '--duration': '2s', fontSize: '4rem' }}></i></div>
-                                        <div className="absolute top-1/2 left-1/2" style={{ transform: 'translate(200px, 120px)' }}><i className="fa-regular fa-snowflake snow-twinkle text-white" style={{ '--duration': '3.5s', fontSize: '2.5rem' }}></i></div>
-                                    </div>
-                                )}
                                 <div className="absolute bottom-full mb-4 w-full flex justify-center pointer-events-none">
                                     {state.isBonusPhase && (<div className="text-indigo-400 font-black uppercase tracking-widest text-3xl animate-pulse" style={{ textShadow: getStroke(false, enableStroke, '0 2px 5px rgba(0,0,0,0.5)') }}>{state.isRollingBonus ? "Определяем доп. время..." : "Доп. время"}</div>)}
                                 </div>
                                 <h1 className="font-black tabular-nums leading-none transition-all duration-300 relative z-10" style={{ color: colorStr, textShadow: glowStr, fontSize: `14rem` }}>{formatTime(state.timeLeft)}</h1>
                                 
                                 <div className="absolute top-full mt-4 w-full flex flex-row flex-wrap justify-center items-stretch gap-6 pointer-events-none z-30 px-4">
-                                    {state.isFrozen && (
-                                        <div className={`px-6 py-4 rounded-[2rem] border-4 shadow-2xl animate-pulse flex flex-col items-center justify-center gap-2`} style={{ background: `linear-gradient(135deg, #0284c7 0%, rgba(0,0,0,0.5) 100%)`, borderColor: '#38bdf8' }}>
-                                            <span className={`${state.multiplier?.isActive ? 'text-3xl md:text-4xl' : 'text-5xl md:text-6xl'} font-black text-white uppercase tracking-wider text-center leading-none`} style={{ textShadow: getStroke(false, enableStroke) }}>❄️ ЗАМОРОЗКА ❄️</span>
-                                            <span className={`${state.multiplier?.isActive ? 'text-4xl md:text-5xl' : 'text-6xl md:text-7xl'} font-black text-white tabular-nums bg-black/40 px-6 py-2 rounded-full border border-white/20 mt-1`} style={{ textShadow: getStroke(false, enableStroke) }}>{formatTime(state.freezeTimeLeft)}</span>
-                                        </div>
-                                    )}
-
                                     {state.multiplier?.isActive && (
                                         <div className={`px-6 py-4 rounded-[2rem] border-4 shadow-2xl animate-bounce flex flex-col items-center justify-center gap-2`} style={{ background: state.multiplier.type === 'buff' ? `linear-gradient(135deg, ${styles.buffCardBg||'#10b981'} 0%, rgba(0,0,0,0.5) 100%)` : `linear-gradient(135deg, ${styles.debuffCardBg||'#e11d48'} 0%, rgba(0,0,0,0.5) 100%)`, borderColor: state.multiplier.type === 'buff' ? (styles.buffCardBg||'#10b981') : (styles.debuffCardBg||'#e11d48') }}>
-                                            <span className={`${state.isFrozen ? 'text-3xl md:text-4xl' : 'text-5xl md:text-6xl'} font-black text-white uppercase tracking-wider text-center leading-none`} style={{ textShadow: getStroke(false, enableStroke) }}>{state.multiplier.type === 'buff' ? `⚡ ПРИБАВЛЯЕТ (x${state.multiplier.value}) ⚡` : `☠️ УБАВЛЯЕТ (x${state.multiplier.value}) ☠️`}</span>
-                                            <span className={`${state.isFrozen ? 'text-4xl md:text-5xl' : 'text-6xl md:text-7xl'} font-black text-white tabular-nums bg-black/40 px-6 py-2 rounded-full border border-white/20 mt-1`} style={{ textShadow: getStroke(false, enableStroke) }}>{formatTime(state.multiplier.timeLeft)}</span>
+                                            <span className={`text-5xl md:text-6xl font-black text-white uppercase tracking-wider text-center leading-none`} style={{ textShadow: getStroke(false, enableStroke) }}>{state.multiplier.type === 'buff' ? `⚡ ПРИБАВЛЯЕТ (x${state.multiplier.value}) ⚡` : `☠️ УБАВЛЯЕТ (x${state.multiplier.value}) ☠️`}</span>
+                                            <span className={`text-6xl md:text-7xl font-black text-white tabular-nums bg-black/40 px-6 py-2 rounded-full border border-white/20 mt-1`} style={{ textShadow: getStroke(false, enableStroke) }}>{formatTime(state.multiplier.timeLeft)}</span>
                                         </div>
                                     )}
                                 </div>

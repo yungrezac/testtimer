@@ -11,10 +11,9 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Comic+Neue:wght@700&family=Roboto:wght@700;900&family=Open+Sans:wght@700;800&family=Oswald:wght@700&family=Raleway:wght@800;900&family=Nunito:wght@800;900&family=Playfair+Display:wght@700;900&family=Caveat:wght@700&family=Rubik:wght@700;900&family=Pacifico&family=Yanone+Kaffeesatz:wght@700&family=Comfortaa:wght@700&family=Ruslan+Display&family=Kelly+Slab&family=Roboto+Slab:wght@700;900&family=Lobster&family=Alice&family=PT+Sans:wght@700&display=swap" rel="stylesheet">
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Comic+Neue:wght@700&family=Roboto:wght@700;900&family=Open+Sans:wght@700;800&family=Oswald:wght@700&family=Pacifico&display=swap');
-        
         body { background-color: transparent !important; color: #f8fafc; overflow: hidden; margin: 0; padding: 0;}
         
         @keyframes floatUpFade { 0% { transform: translate(-50%, 50px) scale(0.5); opacity: 0; } 15% { transform: translate(-50%, -10px) scale(1.2); opacity: 1; } 80% { transform: translate(-50%, -60px) scale(1); opacity: 1; } 100% { transform: translate(-50%, -100px) scale(0.8); opacity: 0; } }
@@ -65,6 +64,7 @@
                     let text = data.isSpecial ? data.giftName : null;
                     if (data.type === 'freeze') text = '❄️ ЗАМОРОЗКА!';
                     if (data.type === 'unfreeze') text = '🔥 РАЗМОРОЗКА!';
+                    if (data.type === 'like' || data.type === 'follow') text = data.giftName || null;
                     setAlerts(prev => [...prev, { id, amount: data.timeAdded, text: text, type: data.type }]);
                     setTimeout(() => setAlerts(prev => prev.filter(n => n.id !== id)), 2000);
                 });
@@ -81,13 +81,22 @@
             else if (state.multiplier?.isActive) { colorStr = state.multiplier.type === 'buff' ? (styles.buffColor || '#34d399') : (styles.debuffColor || '#f43f5e'); glowStr = getStroke(true, enableStroke, `0px 10px 40px ${hexToRgba(colorStr, glowIntensity)}, 0px 0px 60px ${hexToRgba(colorStr, glowIntensity * 0.75)}`); } 
             else if (state.timeLeft > 0 && state.timeLeft <= 300) { colorStr = '#ef4444'; glowStr = getStroke(true, enableStroke, `0px 10px 40px ${hexToRgba(colorStr, glowIntensity)}, 0px 0px 60px ${hexToRgba(colorStr, glowIntensity * 0.75)}`); }
 
+            // Выбор цвета для уведомления в зависимости от его типа
+            const getAlertColor = (type, amount) => {
+                if (type === 'like') return (styles.likeAlertColor || '#f43f5e');
+                if (type === 'follow') return (styles.followAlertColor || '#34d399');
+                if (amount > 0) return (styles.floatPlusColor || '#34d399');
+                if (amount < 0) return (styles.floatMinusColor || '#f87171');
+                return '#fbbf24';
+            };
+
             return (
                 <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-transparent" style={{ fontFamily: fontFam }}>
                     <div className="absolute top-1/2 left-1/2 pointer-events-auto flex flex-col items-center justify-center w-[1000px] h-[560px]" style={{ transform: `translate(-50%, -50%) scale(1)` }}>
                         
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30">
                             {alerts.map(num => (
-                                <div key={num.id} className="float-up-anim font-black whitespace-nowrap" style={{ fontSize: `7.7rem`, color: num.amount > 0 ? (styles.floatPlusColor||'#34d399') : (num.amount < 0 ? (styles.floatMinusColor||'#f87171') : '#fbbf24'), textShadow: getStroke(false, enableStroke, '0px 5px 20px rgba(0,0,0,0.9)') }}>
+                                <div key={num.id} className="float-up-anim font-black whitespace-nowrap" style={{ fontSize: `7.7rem`, color: getAlertColor(num.type, num.amount), textShadow: getStroke(false, enableStroke, '0px 5px 20px rgba(0,0,0,0.9)') }}>
                                     {num.text ? num.text : `${num.amount > 0 ? '+' : ''}${num.amount} сек`}
                                 </div>
                             ))}

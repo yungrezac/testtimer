@@ -24,7 +24,7 @@ class UserSession {
         
         this.timerState = {
             timeLeft: 0, isRunning: false, isVictory: false, isBonusPhase: false, isRollingBonus: false,
-            bonusTriggerUser: '', forceVictory: false, isFrozen: false, freezeTimeLeft: 0,
+            bonusTriggerUser: '', forceVictory: false,
             settings: {}, subbedUsers: new Set(), userLikes: {}
         };
         this.multiplierState = { isActive: false, type: 'buff', value: 1, timeLeft: 0 };
@@ -59,11 +59,6 @@ class UserSession {
         this.mainInterval = setInterval(() => {
             if (this.timerState.isRunning && !this.timerState.isVictory && !this.timerState.isRollingBonus) {
                 if (this.timerState.timeLeft > 0) this.timerState.timeLeft -= 1;
-
-                if (this.timerState.isFrozen && this.timerState.freezeTimeLeft > 0) {
-                    this.timerState.freezeTimeLeft -= 1;
-                    if (this.timerState.freezeTimeLeft <= 0) this.timerState.isFrozen = false;
-                }
                 
                 if (this.timerState.timeLeft <= 0) {
                     if (this.timerState.forceVictory) {
@@ -91,7 +86,6 @@ class UserSession {
         this.emit('timer-tick', {
             timeLeft: this.timerState.timeLeft, isVictory: this.timerState.isVictory, isRunning: this.timerState.isRunning,
             multiplier: this.multiplierState, isBonusPhase: this.timerState.isBonusPhase, isRollingBonus: this.timerState.isRollingBonus,
-            isFrozen: this.timerState.isFrozen, freezeTimeLeft: this.timerState.freezeTimeLeft,
             currentTotalLikes: this.currentStreamTotalLikes,
             likesRouletteThreshold: this.timerState.settings?.likesRouletteThreshold || 100000,
             likesRouletteEnabled: this.timerState.settings?.likesRouletteEnabled || false
@@ -103,7 +97,6 @@ class UserSession {
 
     addTime(amount, username, ignoreMultiplier = false) {
         if (this.timerState.isVictory) return 0;
-        if (this.timerState.isFrozen && !ignoreMultiplier) return 0;
 
         let timeChange = parseInt(amount, 10);
         if (isNaN(timeChange)) timeChange = 0;
@@ -115,6 +108,8 @@ class UserSession {
         
         let oldTime = this.timerState.timeLeft;
         this.timerState.timeLeft += timeChange;
+        
+        // Prevent going below zero during normal operations
         if (this.timerState.timeLeft <= 0) {
             this.timerState.timeLeft = 0;
             if (oldTime > 0) this.timerState.bonusTriggerUser = username;
@@ -130,10 +125,6 @@ class UserSession {
         let enabledSlots = this.timerState.settings.rouletteSlots.filter(s => s.isEnabled !== false);
         if (enabledSlots.length === 0) enabledSlots = this.timerState.settings.rouletteSlots;
         let availableSlots = enabledSlots;
-
-        if (this.timerState.isFrozen) availableSlots = availableSlots.filter(s => !['multiplier', 'debuff', 'freeze'].includes(s.type));
-        else availableSlots = availableSlots.filter(s => s.type !== 'unfreeze');
-        if (availableSlots.length === 0) availableSlots = enabledSlots;
         
         if (this.timerState.timeLeft <= 300) availableSlots = availableSlots.filter(s => !['sub_time', 'divide_time'].includes(s.type));
         if (availableSlots.length === 0) availableSlots = enabledSlots;
@@ -156,11 +147,6 @@ class UserSession {
 
         const exchangeRates = { 'USD': 92, 'EUR': 100, 'KZT': 0.2, 'BYN': 28, 'UAH': 2.4, 'RUB': 1 };
         let amountInRub = rawAmount * (exchangeRates[String(currency || 'RUB').toUpperCase()] || 1);
-
-        if (this.timerState.isFrozen) {
-            this.broadcastAlert({ id: Date.now(), username, avatar: 'https://cdn-icons-png.flaticon.com/512/5272/5272370.png', giftName: `Донат ${rawAmount}`, timeAdded: 0, type: 'frozen_gift', amount: 1, targetTime: this.timerState.timeLeft });
-            return;
-        }
 
         let addedTime = this.addTime(Math.floor(amountInRub), username);
         this.broadcastAlert({ id: Date.now(), username, avatar: 'https://cdn-icons-png.flaticon.com/512/5272/5272370.png', giftName: `Донат ${rawAmount}`, timeAdded: addedTime, type: 'gift', amount: 1, targetTime: this.timerState.timeLeft });
@@ -205,7 +191,6 @@ class UserSession {
                 if (this.tiktokConnection) this.tiktokConnection.isAlive = true;
                 if (this.tikToolWatchdog) { clearTimeout(this.tikToolWatchdog); this.tikToolWatchdog = setTimeout(() => this.disconnectTikTok(), 180000); }
                 
-                // Если мы получили ЛЮБОЕ сообщение от стрима, значит стрим активен
                 if (!this.statusText.tt.isStreamLive) {
                     this.statusText.tt.isStreamLive = true;
                     this.broadcastStatus();
@@ -254,30 +239,12 @@ class UserSession {
 
         let addedTime = 0; let eventType = 'gift';
 
-        if (this.timerState.isFrozen && this.timerState.settings.isFreezeEnabled !== false && this.checkIds(this.timerState.settings.giftUnfreezeIds, giftIdStr)) {
-            this.timerState.freezeTimeLeft -= (this.timerState.settings.unfreezeDuration || 60) * count;
-            if (this.timerState.freezeTimeLeft <= 0) { this.timerState.isFrozen = false; this.timerState.freezeTimeLeft = 0; }
-            this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: 0, type: 'unfreeze', amount: count, targetTime: this.timerState.timeLeft });
-            this.broadcastTime(); return;
-        }
-
         if (this.checkIds(this.timerState.settings.giftRouletteIds, giftIdStr)) {
             for(let i=0; i<count; i++) this.rouletteQueue.push({ username: nickname, avatar, triggerGift: { name: giftName, icon: giftIcon } });
             this.checkRouletteQueue();
-            if (this.timerState.settings.rouletteGiftAddsCost && totalCoins > 0 && !this.timerState.isFrozen) addedTime = this.addTime(totalCoins, nickname, true);
+            if (this.timerState.settings.rouletteGiftAddsCost && totalCoins > 0) addedTime = this.addTime(totalCoins, nickname, true);
             this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: addedTime, type: 'roulette', amount: count, targetTime: this.timerState.timeLeft });
             this.broadcastTime(); return;
-        }
-
-        if (this.timerState.settings.isFreezeEnabled !== false && this.checkIds(this.timerState.settings.giftFreezeIds, giftIdStr)) {
-            this.timerState.isFrozen = true; this.timerState.freezeTimeLeft += (this.timerState.settings.freezeDuration || 60) * count;
-            this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: 0, type: 'freeze', amount: count, targetTime: this.timerState.timeLeft });
-            this.broadcastTime(); return;
-        }
-
-        if (this.timerState.isFrozen) {
-            this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: 0, type: 'frozen_gift', amount: count, targetTime: this.timerState.timeLeft });
-            return;
         }
 
         if (this.timerState.settings.isMultiplierGiftEnabled && this.checkIds(this.timerState.settings.giftMultiplierIds, giftIdStr)) {
@@ -358,18 +325,29 @@ class UserSession {
         if (!isNaN(apiTotalLikes) && apiTotalLikes > this.currentStreamTotalLikes) this.currentStreamTotalLikes = apiTotalLikes;
         else this.currentStreamTotalLikes += batchLikes;
         
+        // Логика рулетки за общие лайки с точным улавливанием перехода порога
         if (this.timerState.settings.likesRouletteEnabled && this.currentStreamTotalLikes > 0) {
             const threshold = parseInt(this.timerState.settings.likesRouletteThreshold) || 100000;
             const currentMilestone = Math.floor(this.currentStreamTotalLikes / threshold);
-            if (this.lastProcessedLikesMilestone === null) this.lastProcessedLikesMilestone = currentMilestone;
-            else if (currentMilestone > this.lastProcessedLikesMilestone) {
-                for (let i = 0; i < (currentMilestone - this.lastProcessedLikesMilestone); i++) {
+            
+            if (this.lastProcessedLikesMilestone === null) {
+                // Если это первый прилет лайков, мы вычисляем, какой порог был до этого батча лайков
+                let previousTotal = this.currentStreamTotalLikes - batchLikes;
+                if (previousTotal < 0) previousTotal = 0;
+                this.lastProcessedLikesMilestone = Math.floor(previousTotal / threshold);
+            }
+            
+            if (currentMilestone > this.lastProcessedLikesMilestone) {
+                const diff = currentMilestone - this.lastProcessedLikesMilestone;
+                for (let i = 0; i < diff; i++) {
                     this.rouletteQueue.push({ username: 'Лайки', avatar: 'https://cdn-icons-png.flaticon.com/512/833/833472.png', triggerGift: { name: 'Лайки', icon: 'https://cdn-icons-png.flaticon.com/512/833/833472.png' }, isLikesRoulette: true });
                 }
-                this.lastProcessedLikesMilestone = currentMilestone; this.checkRouletteQueue();
+                this.lastProcessedLikesMilestone = currentMilestone; 
+                this.checkRouletteQueue();
             }
         }
 
+        // Логика добавления времени за локальные лайки
         if (!this.timerState.settings.likesEnabled) return;
         const limit = parseInt(this.timerState.settings.likeThreshold) || 100;
         const userId = data.uniqueId || data.user?.uniqueId || String(Math.random());
@@ -379,13 +357,9 @@ class UserSession {
         if (triggers > 0) {
             this.timerState.userLikes[userId] -= triggers * limit;
             for (let i = 0; i < triggers; i++) {
-                if (this.timerState.isFrozen) {
-                    this.broadcastAlert({ id: Date.now()+i, username: nickname, avatar, giftName: "ЛАЙКИ", timeAdded: 0, type: 'frozen_gift', amount: limit, targetTime: this.timerState.timeLeft });
-                } else {
-                    let amountToAdd = parseInt(this.timerState.settings.likeTime, 10);
-                    let addedTime = this.addTime(amountToAdd, nickname, true);
-                    this.broadcastAlert({ id: Date.now()+i, username: nickname, avatar, giftName: "ЛАЙКИ", timeAdded: addedTime, type: 'like', amount: limit, targetTime: this.timerState.timeLeft });
-                }
+                let amountToAdd = parseInt(this.timerState.settings.likeTime, 10);
+                let addedTime = this.addTime(amountToAdd, nickname, true);
+                this.broadcastAlert({ id: Date.now()+i, username: nickname, avatar, giftName: "ЛАЙКИ", timeAdded: addedTime, type: 'like', amount: limit, targetTime: this.timerState.timeLeft });
             }
         }
         this.broadcastTime();
@@ -393,7 +367,6 @@ class UserSession {
 
     handleTikTokFollow(data) {
         if (this.timerState.isVictory || this.timerState.isRollingBonus || !this.timerState.settings.subsEnabled) return;
-        // Иногда события подписки/социальные приходят с разными ключами
         if (data.action && data.action !== 'follow' && data.action !== 'subscribe') return;
         
         const nickname = data.nickname || data.user?.nickname || 'Зритель';
@@ -402,13 +375,9 @@ class UserSession {
         
         if (!this.timerState.subbedUsers.has(userId)) {
             this.timerState.subbedUsers.add(userId);
-            if (this.timerState.isFrozen) {
-                this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName: "ПОДПИСКА", timeAdded: 0, type: 'frozen_gift', targetTime: this.timerState.timeLeft });
-            } else {
-                let amountToAdd = parseInt(this.timerState.settings.subTime, 10);
-                let addedTime = this.addTime(amountToAdd, nickname, true);
-                this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName: "ПОДПИСКА", timeAdded: addedTime, type: 'follow', targetTime: this.timerState.timeLeft });
-            }
+            let amountToAdd = parseInt(this.timerState.settings.subTime, 10);
+            let addedTime = this.addTime(amountToAdd, nickname, true);
+            this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName: "ПОДПИСКА", timeAdded: addedTime, type: 'follow', targetTime: this.timerState.timeLeft });
             this.broadcastTime();
         }
     }
@@ -557,17 +526,28 @@ io.on('connection', (socket) => {
         session.timerState.settings = config; session.timerState.settings.originalRouletteSlots = [...(config.rouletteSlots || [])];
         session.timerState.timeLeft = config.initialTime * 60; session.timerState.isRunning = true; session.timerState.isVictory = false; session.timerState.isBonusPhase = false;
         session.multiplierState.isActive = false; session.rouletteQueue = []; session.isRouletteBusy = false;
-        session.timerState.isFrozen = false; session.timerState.freezeTimeLeft = 0; session.timerState.subbedUsers.clear(); session.timerState.userLikes = {};
+        session.timerState.subbedUsers.clear(); session.timerState.userLikes = {};
         session.lastProcessedLikesMilestone = null;
         session.broadcastTime();
     });
 
     socket.on('stop-timer', () => { if (!userId) return; const s = getSession(userId); s.timerState.isRunning = false; s.broadcastTime(); });
     socket.on('toggle-timer', () => { if (!userId) return; const s = getSession(userId); s.timerState.isRunning = !s.timerState.isRunning; s.broadcastTime(); });
-    socket.on('manual-add', (sec) => { if (!userId) return; const s = getSession(userId); s.timerState.timeLeft += sec; if(s.timerState.timeLeft > 0) s.timerState.isVictory = false; s.broadcastTime(); });
-    socket.on('manual-sub', (sec) => { if (!userId) return; const s = getSession(userId); s.timerState.timeLeft = Math.max(0, s.timerState.timeLeft - sec); if(s.timerState.timeLeft === 0) { s.timerState.isVictory = true; s.timerState.isRunning = false; } s.broadcastTime(); });
-    socket.on('manual-freeze', () => { if (!userId) return; const s = getSession(userId); s.timerState.isFrozen = true; s.timerState.freezeTimeLeft += s.timerState.settings.freezeDuration || 60; s.broadcastTime(); });
-    socket.on('manual-unfreeze', () => { if (!userId) return; const s = getSession(userId); s.timerState.freezeTimeLeft -= s.timerState.settings.unfreezeDuration || 60; if(s.timerState.freezeTimeLeft <= 0) {s.timerState.isFrozen = false; s.timerState.freezeTimeLeft = 0;} s.broadcastTime(); });
+    
+    // Add/Sub time from manual trigger calculates actual addedTime with negatives
+    socket.on('manual-add', (sec) => { 
+        if (!userId) return; const s = getSession(userId); 
+        s.timerState.timeLeft += sec; if(s.timerState.timeLeft > 0) s.timerState.isVictory = false; 
+        s.broadcastTime(); 
+    });
+    socket.on('manual-sub', (sec) => { 
+        if (!userId) return; const s = getSession(userId); 
+        let old = s.timerState.timeLeft;
+        s.timerState.timeLeft = Math.max(0, s.timerState.timeLeft - sec); 
+        if(s.timerState.timeLeft === 0) { s.timerState.isVictory = true; s.timerState.isRunning = false; } 
+        s.broadcastTime(); 
+    });
+    
     socket.on('manual-trigger-roulette', () => { if (!userId) return; const s = getSession(userId); s.rouletteQueue.push({ username: 'Стример', avatar: 'https://cdn-icons-png.flaticon.com/512/2888/2888661.png', triggerGift: { name: 'Пульт', icon: '' } }); s.checkRouletteQueue(); });
 
     socket.on('apply-roulette-result', (payload) => {
@@ -581,10 +561,8 @@ io.on('connection', (socket) => {
             session.timerState.settings.rouletteSlots = updatedSlots; session.emit('settings-updated', session.timerState.settings);
         }
 
-        if (winner.type === 'set_time') { session.timerState.timeLeft = winner.value; addedTime = winner.value; }
-        else if (winner.type === 'reset_time') { session.timerState.timeLeft = 0; session.timerState.forceVictory = true; addedTime = 0; }
-        else if (winner.type === 'freeze') { session.timerState.isFrozen = true; session.timerState.freezeTimeLeft += winner.value || 60; alertText = '❄️ ЗАМОРОЗКА!'; isSpecial = true; }
-        else if (winner.type === 'unfreeze') { session.timerState.freezeTimeLeft -= session.timerState.settings.unfreezeDuration || 60; if(session.timerState.freezeTimeLeft <= 0) {session.timerState.isFrozen = false; session.timerState.freezeTimeLeft = 0;} alertText = '🔥 РАЗМОРОЗКА!'; isSpecial = true; }
+        if (winner.type === 'set_time') { addedTime = winner.value - session.timerState.timeLeft; session.timerState.timeLeft = winner.value; }
+        else if (winner.type === 'reset_time') { addedTime = -session.timerState.timeLeft; session.timerState.timeLeft = 0; session.timerState.forceVictory = true; }
         else if (winner.type === 'extra_spin') {
             alertText = `ЕЩЕ ПРОКРУТ (x${winner.value||1})`; isSpecial = true;
             for (let i = 0; i < (winner.value||1); i++) session.rouletteQueue.unshift({ username: user.username, avatar: user.avatar, triggerGift: { name: 'Доп. прокрут', icon: 'https://cdn-icons-png.flaticon.com/512/808/808271.png' } });

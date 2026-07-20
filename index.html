@@ -16,7 +16,7 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Comic+Neue:wght@700&family=Roboto:wght@700;900&family=Open+Sans:wght@700;800&family=Oswald:wght@700&family=Raleway:wght@800;900&family=Nunito:wght@800;900&family=Playfair+Display:wght@700;900&family=Caveat:wght@700&family=Rubik:wght@700;900&family=Pacifico&family=Yanone+Kaffeesatz:wght@700&family=Comfortaa:wght@700&family=Ruslan+Display&family=Kelly+Slab&family=Roboto+Slab:wght@700;900&family=Lobster&family=Alice&family=PT+Sans:wght@700&display=swap');
         
-        body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; overflow: hidden; }
+        body { background-color: #0f172a; color: #f8fafc; overflow: hidden; transition: font-family 0.3s ease; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
@@ -58,7 +58,6 @@
         socket.on('check-and-save-gift', async (gift) => {
             if (!gift || !gift.gift_id || knownGiftsCache.has(gift.gift_id)) return;
             try {
-                // Используем оригинальную таблицу для подарков
                 const { error } = await supabase.from('gift_library').upsert([{ gift_id: gift.gift_id, name: gift.name, icon: gift.icon, cost: gift.cost }], { onConflict: 'gift_id' });
                 if (!error) knownGiftsCache.add(gift.gift_id);
             } catch (err) { }
@@ -83,7 +82,7 @@
             }, [isOpen]);
             if (!isOpen) return null;
             return (
-                <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center p-6 z-50 backdrop-blur-sm">
+                <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center p-6 z-50 backdrop-blur-sm" style={{ fontFamily: 'Inter' }}>
                     <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl">
                         <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-white">Библиотека подарков</h2><button onClick={onClose} className="text-slate-400 hover:text-white transition text-xl"><i className="fa-solid fa-xmark"></i></button></div>
                         <input type="text" placeholder="Поиск подарка..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 mb-4 focus:border-indigo-500 text-white outline-none" />
@@ -113,7 +112,7 @@
             }, []);
 
             return (
-                <div className={`remote-widget fixed top-4 right-4 bottom-4 w-[400px] bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col p-5 z-50 overflow-hidden ${isOpen ? 'remote-visible' : 'remote-hidden'}`}>
+                <div className={`remote-widget fixed top-4 right-4 bottom-4 w-[400px] bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl flex flex-col p-5 z-50 overflow-hidden ${isOpen ? 'remote-visible' : 'remote-hidden'}`} style={{ fontFamily: 'Inter' }}>
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-slate-400 font-bold tracking-widest uppercase">Пульт Управления</h2>
                         <button onClick={onClose} className="text-slate-500 hover:text-white transition bg-slate-800 w-8 h-8 rounded-full"><i className="fa-solid fa-xmark"></i></button>
@@ -189,7 +188,7 @@
                 }
             };
             return (
-                <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-white">
+                <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-white" style={{ fontFamily: 'Inter' }}>
                     <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl w-full max-w-md">
                         <div className="flex justify-center mb-6"><span className="text-5xl drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]">⚡</span></div>
                         <h1 className="text-3xl font-black text-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 mb-6">ASTRAL GAME WEB</h1>
@@ -207,7 +206,7 @@
 
         function MainApp({ user, onLogout }) {
             const [activeTab, setActiveTab] = useState('connect');
-            const [status, setStatus] = useState({ tt: { text: 'Ожидание', isActive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' });
+            const [status, setStatus] = useState({ tt: { text: 'Ожидание', isActive: false, isStreamLive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' });
             const [isRunning, setIsRunning] = useState(false);
             const [modal, setModal] = useState({ isOpen: false, key: null });
             const [isRemoteOpen, setIsRemoteOpen] = useState(false);
@@ -223,7 +222,7 @@
                 isDebuffGiftEnabled: false, debuffValue: 2, debuffDuration: 60, giftDebuff: null,
                 likesEnabled: true, likeThreshold: 100, likeTime: 10, likesRouletteEnabled: false, likesRouletteThreshold: 100000, 
                 subsEnabled: true, subTime: 180, customGifts: [], giftRoulette: null, rouletteSlots: [], rouletteGiftAddsCost: false,
-                styles: { fontFamily: 'Inter', timerColor: '#ffffff', timerGlow: 0.4, enableStroke: true, buffColor: '#34d399', debuffColor: '#f43f5e', floatPlusColor: '#34d399', floatMinusColor: '#f87171', buffCardBg: '#10b981', debuffCardBg: '#e11d48', rouletteBg: '#0f172a' }
+                styles: { fontFamily: 'Inter', timerColor: '#ffffff', timerGlow: 0.4, enableStroke: true, buffColor: '#34d399', debuffColor: '#f43f5e', floatPlusColor: '#34d399', floatMinusColor: '#f87171', buffCardBg: '#10b981', debuffCardBg: '#e11d48', rouletteBg: '#0f172a', likeAlertColor: '#f43f5e', followAlertColor: '#34d399' }
             };
 
             const [config, setConfig] = useState(defConfig);
@@ -233,12 +232,11 @@
             const formatPayload = (data) => ({
                 ...data,
                 giftPenaltyIds: data.giftPenalty?.ids || [], giftSetTimeIds: data.giftSetTime?.ids || [], giftResetIds: data.giftReset?.ids || [], giftRouletteIds: data.giftRoulette?.ids || [], giftMultiplierIds: data.giftMultiplier?.ids || [], giftDebuffIds: data.giftDebuff?.ids || [], giftFreezeIds: data.giftFreeze?.ids || [], giftUnfreezeIds: data.giftUnfreeze?.ids || [],
-                customTriggers: data.customGifts.filter(cg => cg.gift).map(cg => ({ ids: cg.gift.ids || [], type: cg.type, value: cg.value, isEnabled: cg.isEnabled }))
+                customTriggers: data.customGifts.filter(cg => cg.gift).map(cg => ({ ids: cg.gift.ids || [], type: cg.type, value: cg.value, threshold: cg.threshold || 0, isEnabled: cg.isEnabled }))
             });
 
             useEffect(() => {
                 socket.emit('join-room', user.id);
-                // Загружаем настройки пользователя из Supabase
                 supabase.from('ttimer_settings').select('config').eq('user_id', user.id).single().then(({ data, error }) => {
                     if (data && data.config) {
                         const merged = { ...defConfig, ...data.config, styles: { ...defConfig.styles, ...(data.config.styles || {}) } };
@@ -263,13 +261,31 @@
 
             const TabBtn = ({ id, icon, text }) => ( <button onClick={() => { if(hasChanges) { document.getElementById('save-bar')?.classList.add('animate-shake'); setTimeout(()=>document.getElementById('save-bar')?.classList.remove('animate-shake'), 400); return;} setActiveTab(id); }} className={`w-full flex items-center gap-3 px-6 py-4 font-semibold transition ${activeTab === id ? 'tab-active' : 'tab-inactive'}`}><i className={icon + " w-5 text-center text-lg"}></i> {text}</button> );
 
+            // Применяем выбранный шрифт ко всему интерфейсу
+            const appFontFamily = config.styles?.fontFamily || 'Inter';
+
             return (
-                <div className="flex h-screen bg-slate-950 font-sans text-slate-200">
-                    <div className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shrink-0 shadow-2xl">
-                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-                            <span className="text-3xl drop-shadow-md">⚡</span><h1 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">ASTRAL GAME</h1>
+                <div className="flex h-screen bg-slate-950 text-slate-200" style={{ fontFamily: appFontFamily }}>
+                    <div className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shrink-0 shadow-2xl relative">
+                        <div className="p-6 border-b border-slate-800 flex flex-col gap-2 relative">
+                            <div className="flex items-center gap-3">
+                                <span className="text-3xl drop-shadow-md">⚡</span><h1 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 leading-none">ASTRAL<br/>GAME</h1>
+                            </div>
+                            
+                            {/* ИНДИКАТОРЫ СОСТОЯНИЯ TIKTOK */}
+                            <div className="flex items-center gap-4 mt-2">
+                                <div className="flex items-center gap-1.5" title="Статус API TikTools">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${status.tt.isActive ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'} transition-all`}></div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Сервер</span>
+                                </div>
+                                <div className="flex items-center gap-1.5" title="Статус реального стрима TikTok">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${status.tt.isStreamLive ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-600'} transition-all`}></div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Стрим</span>
+                                </div>
+                            </div>
                         </div>
-                        <nav className="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
+                        
+                        <nav className="flex-1 py-4 flex flex-col gap-1 overflow-y-auto" style={{ fontFamily: 'Inter' }}>
                             <TabBtn id="connect" icon="fa-solid fa-wifi" text="Подключения" />
                             <TabBtn id="timer" icon="fa-solid fa-clock" text="Лайки, Время, Сабы" />
                             <TabBtn id="buffs" icon="fa-solid fa-bolt" text="Триггеры" />
@@ -277,7 +293,8 @@
                             <TabBtn id="style" icon="fa-solid fa-palette" text="Оформление" />
                             <TabBtn id="obs" icon="fa-solid fa-camera" text="Ссылки для OBS" />
                         </nav>
-                        <div className="p-4 border-t border-slate-800 space-y-3">
+                        
+                        <div className="p-4 border-t border-slate-800 space-y-3" style={{ fontFamily: 'Inter' }}>
                             {isRunning ? (
                                 <button onClick={() => socket.emit('stop-timer')} className="w-full bg-rose-600/20 text-rose-500 border border-rose-500/50 py-3 rounded-xl font-bold transition flex justify-center items-center gap-2 hover:bg-rose-600 hover:text-white"><i className="fa-solid fa-stop"></i> Стоп</button>
                             ) : (
@@ -288,10 +305,10 @@
                         </div>
                     </div>
 
+                    {}
                     <div className="flex-1 overflow-y-auto p-8 relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950 pb-32">
                         <div className="max-w-[1200px] mx-auto space-y-6">
                             
-                            {}
                             {activeTab === 'connect' && (
                                 <div className="space-y-4 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Подключения</h2>
@@ -299,56 +316,55 @@
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-cyan-500/30 transition">
                                         <div className="w-12 h-12 bg-cyan-500/10 flex items-center justify-center rounded-full border border-cyan-500/20 shrink-0"><i className="fa-brands fa-tiktok text-cyan-400 text-2xl"></i></div>
                                         <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isActive ? 'text-emerald-400' : 'text-slate-500'}`}>{status.tt.text}</span></div>
-                                        <div className="flex-1 flex gap-2">
+                                        <div className="flex-1 flex gap-2" style={{ fontFamily: 'Inter' }}>
                                             {!status.tt.isActive && <><input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /><input type="text" value={config.ttApiKey} onChange={e=>setConfig({...config, ttApiKey: e.target.value})} placeholder="API Key (tik.tools)" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /></>}
                                         </div>
-                                        <button onClick={() => { status.tt.isActive ? socket.emit('disconnect-tiktok') : socket.emit('connect-tiktok', { username: config.username, apiKey: config.ttApiKey }) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.tt.isActive ? 'bg-rose-600 hover:bg-rose-500' : 'bg-cyan-600 hover:bg-cyan-500'}`}>{status.tt.isActive ? 'Отключить' : 'Подключить'}</button>
+                                        <button onClick={() => { status.tt.isActive ? socket.emit('disconnect-tiktok') : socket.emit('connect-tiktok', { username: config.username, apiKey: config.ttApiKey }) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.tt.isActive ? 'bg-rose-600 hover:bg-rose-500' : 'bg-cyan-600 hover:bg-cyan-500'}`} style={{ fontFamily: 'Inter' }}>{status.tt.isActive ? 'Отключить' : 'Подключить'}</button>
                                     </div>
 
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-orange-500/30 transition">
                                         <div className="w-12 h-12 bg-orange-500/10 flex items-center justify-center rounded-full border border-orange-500/20 shrink-0"><i className="fa-solid fa-shield-halved text-orange-400 text-xl"></i></div>
                                         <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">DonationAlerts</h3><span className={`text-[11px] font-bold ${status.da.includes('Успешно') ? 'text-emerald-400' : 'text-slate-500'}`}>{status.da}</span></div>
                                         <div className="flex-1"></div>
-                                        <button onClick={() => { status.da.includes('Успешно') ? socket.emit('disconnect-da') : window.open(`https://www.donationalerts.com/oauth/authorize?client_id=12952&response_type=token&scope=oauth-user-show%20oauth-donation-subscribe&redirect_uri=${window.location.origin}/da-callback`, '_blank', 'width=500,height=700') }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.da.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-orange-600 hover:bg-orange-500'}`}>{status.da.includes('Успешно') ? 'Отключить' : 'Авторизоваться'}</button>
+                                        <button onClick={() => { status.da.includes('Успешно') ? socket.emit('disconnect-da') : window.open(`https://www.donationalerts.com/oauth/authorize?client_id=12952&response_type=token&scope=oauth-user-show%20oauth-donation-subscribe&redirect_uri=${window.location.origin}/da-callback`, '_blank', 'width=500,height=700') }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.da.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-orange-600 hover:bg-orange-500'}`} style={{ fontFamily: 'Inter' }}>{status.da.includes('Успешно') ? 'Отключить' : 'Авторизоваться'}</button>
                                     </div>
 
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-blue-500/30 transition">
                                         <div className="w-12 h-12 bg-blue-500/10 flex items-center justify-center rounded-full border border-blue-500/20 shrink-0"><i className="fa-solid fa-wallet text-blue-400 text-xl"></i></div>
                                         <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">DonatePay</h3><span className={`text-[11px] font-bold ${status.dp.includes('Успешно') ? 'text-emerald-400' : 'text-slate-500'}`}>{status.dp}</span></div>
-                                        <div className="flex-1 flex gap-2">{!status.dp.includes('Успешно') && <input type="text" value={config.dpApiKey} onChange={e=>setConfig({...config, dpApiKey: e.target.value})} placeholder="API Key" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />}</div>
-                                        <button onClick={() => { status.dp.includes('Успешно') ? socket.emit('disconnect-dp') : socket.emit('connect-dp', config.dpApiKey) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.dp.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-blue-600 hover:bg-blue-500'}`}>{status.dp.includes('Успешно') ? 'Отключить' : 'Подключить'}</button>
+                                        <div className="flex-1 flex gap-2" style={{ fontFamily: 'Inter' }}>{!status.dp.includes('Успешно') && <input type="text" value={config.dpApiKey} onChange={e=>setConfig({...config, dpApiKey: e.target.value})} placeholder="API Key" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />}</div>
+                                        <button onClick={() => { status.dp.includes('Успешно') ? socket.emit('disconnect-dp') : socket.emit('connect-dp', config.dpApiKey) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.dp.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-blue-600 hover:bg-blue-500'}`} style={{ fontFamily: 'Inter' }}>{status.dp.includes('Успешно') ? 'Отключить' : 'Подключить'}</button>
                                     </div>
 
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-purple-500/30 transition">
                                         <div className="w-12 h-12 bg-purple-500/10 flex items-center justify-center rounded-full border border-purple-500/20 shrink-0"><i className="fa-solid fa-bolt text-purple-400 text-xl"></i></div>
                                         <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">DonateX.gg</h3><span className={`text-[11px] font-bold ${status.dx.includes('Успешно') ? 'text-emerald-400' : 'text-slate-500'}`}>{status.dx}</span></div>
-                                        <div className="flex-1 flex gap-2">{!status.dx.includes('Успешно') && <input type="text" value={config.dxToken} onChange={e=>setConfig({...config, dxToken: e.target.value})} placeholder="External Token" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />}</div>
-                                        <button onClick={() => { status.dx.includes('Успешно') ? socket.emit('disconnect-dx') : socket.emit('connect-dx', config.dxToken) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.dx.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-purple-600 hover:bg-purple-500'}`}>{status.dx.includes('Успешно') ? 'Отключить' : 'Подключить'}</button>
+                                        <div className="flex-1 flex gap-2" style={{ fontFamily: 'Inter' }}>{!status.dx.includes('Успешно') && <input type="text" value={config.dxToken} onChange={e=>setConfig({...config, dxToken: e.target.value})} placeholder="External Token" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />}</div>
+                                        <button onClick={() => { status.dx.includes('Успешно') ? socket.emit('disconnect-dx') : socket.emit('connect-dx', config.dxToken) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.dx.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-purple-600 hover:bg-purple-500'}`} style={{ fontFamily: 'Inter' }}>{status.dx.includes('Успешно') ? 'Отключить' : 'Подключить'}</button>
                                     </div>
                                 </div>
                             )}
 
-                            {}
                             {activeTab === 'timer' && (
                                 <div className="space-y-6 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Лайки, Время, Подписки</h2>
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
                                             <h3 className="font-bold text-slate-300 mb-4">Начальное время (мин)</h3>
-                                            <input type="number" value={config.initialTime} onChange={e => setConfig({...config, initialTime: Number(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none focus:border-indigo-500 text-white" />
+                                            <input type="number" value={config.initialTime} onChange={e => setConfig({...config, initialTime: Number(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none focus:border-indigo-500 text-white" style={{ fontFamily: 'Inter' }} />
                                         </div>
                                         <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl flex flex-col justify-center gap-4">
                                             <div className={`flex justify-between items-center bg-slate-800/50 p-3 rounded-xl border ${config.likesEnabled ? 'border-emerald-500/50' : 'border-slate-700'} transition-all`}>
-                                                <div className="flex items-center gap-3"><div onClick={() => setConfig({...config, likesEnabled: !config.likesEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.likesEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.likesEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div><span className="text-sm font-semibold text-white">За <input type="number" value={config.likeThreshold} onChange={e => setConfig({...config, likeThreshold: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 border border-slate-600 outline-none" /> лайков</span></div>
-                                                <div className="flex items-center"><input type="number" value={config.likeTime} onChange={e => setConfig({...config, likeTime: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 text-emerald-400 font-bold border border-slate-600 outline-none" /><span className="text-emerald-400 font-bold ml-1">сек</span></div>
+                                                <div className="flex items-center gap-3"><div onClick={() => setConfig({...config, likesEnabled: !config.likesEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.likesEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.likesEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div><span className="text-sm font-semibold text-white">За <input type="number" value={config.likeThreshold} onChange={e => setConfig({...config, likeThreshold: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 border border-slate-600 outline-none" style={{ fontFamily: 'Inter' }} /> лайков</span></div>
+                                                <div className="flex items-center"><input type="number" value={config.likeTime} onChange={e => setConfig({...config, likeTime: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 text-emerald-400 font-bold border border-slate-600 outline-none" style={{ fontFamily: 'Inter' }} /><span className="text-emerald-400 font-bold ml-1">сек</span></div>
                                             </div>
                                             <div className={`flex justify-between items-center bg-slate-800/50 p-3 rounded-xl border ${config.likesRouletteEnabled ? 'border-purple-500/50' : 'border-slate-700'} transition-all`}>
                                                 <div className="flex items-center gap-3"><div onClick={() => setConfig({...config, likesRouletteEnabled: !config.likesRouletteEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.likesRouletteEnabled ? 'bg-purple-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.likesRouletteEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div><span className="text-sm font-semibold text-white">Рулетка за общие лайки</span></div>
-                                                <div className="flex items-center"><input type="number" value={config.likesRouletteThreshold} onChange={e => setConfig({...config, likesRouletteThreshold: Number(e.target.value)})} className="w-20 bg-slate-950 text-center rounded py-1 text-purple-400 font-bold border border-slate-600 outline-none" /></div>
+                                                <div className="flex items-center"><input type="number" value={config.likesRouletteThreshold} onChange={e => setConfig({...config, likesRouletteThreshold: Number(e.target.value)})} className="w-20 bg-slate-950 text-center rounded py-1 text-purple-400 font-bold border border-slate-600 outline-none" style={{ fontFamily: 'Inter' }} /></div>
                                             </div>
                                             <div className={`flex justify-between items-center bg-slate-800/50 p-3 rounded-xl border ${config.subsEnabled ? 'border-emerald-500/50' : 'border-slate-700'} transition-all`}>
                                                 <div className="flex items-center gap-3"><div onClick={() => setConfig({...config, subsEnabled: !config.subsEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.subsEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.subsEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div><span className="text-sm font-semibold text-white">Новый Подписчик</span></div>
-                                                <div className="flex items-center"><input type="number" value={config.subTime} onChange={e => setConfig({...config, subTime: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 text-emerald-400 font-bold border border-slate-600 outline-none" /><span className="text-emerald-400 font-bold ml-1">сек</span></div>
+                                                <div className="flex items-center"><input type="number" value={config.subTime} onChange={e => setConfig({...config, subTime: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 text-emerald-400 font-bold border border-slate-600 outline-none" style={{ fontFamily: 'Inter' }} /><span className="text-emerald-400 font-bold ml-1">сек</span></div>
                                             </div>
                                         </div>
                                     </div>
@@ -357,7 +373,7 @@
                                             <div onClick={() => setConfig({...config, bonusEnabled: !config.bonusEnabled})} className={`w-14 h-7 rounded-full relative cursor-pointer ${config.bonusEnabled ? 'bg-indigo-500' : 'bg-slate-700'}`}><div className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-transform ${config.bonusEnabled ? 'translate-x-8' : 'translate-x-1'}`}></div></div>
                                             <h3 className="text-xl font-bold text-white">Бонусное время при нуле</h3>
                                         </div>
-                                        <div className={`grid grid-cols-2 gap-4 ${!config.bonusEnabled && 'opacity-30 pointer-events-none'}`}>
+                                        <div className={`grid grid-cols-2 gap-4 ${!config.bonusEnabled && 'opacity-30 pointer-events-none'}`} style={{ fontFamily: 'Inter' }}>
                                             <div><label className="text-xs text-slate-400 font-bold mb-1 block">Минимум (сек)</label><input type="number" value={config.bonusMin} onChange={e => setConfig({...config, bonusMin: Number(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-indigo-300 font-bold outline-none" /></div>
                                             <div><label className="text-xs text-slate-400 font-bold mb-1 block">Максимум (сек)</label><input type="number" value={config.bonusMax} onChange={e => setConfig({...config, bonusMax: Number(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-indigo-300 font-bold outline-none" /></div>
                                         </div>
@@ -381,17 +397,17 @@
                                                     <label className="text-xs text-slate-400 font-bold block mb-2">Подарок ЗАМОРОЗКИ</label>
                                                     <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-700 mb-2">
                                                         {config.giftFreeze ? <div className="flex items-center gap-3"><img src={config.giftFreeze.icon} className="w-8 h-8"/> <span className="font-bold text-sm text-slate-200">{config.giftFreeze.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
-                                                        <button onClick={() => setModal({ isOpen: true, key: 'giftFreeze' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white">Выбрать</button>
+                                                        <button onClick={() => setModal({ isOpen: true, key: 'giftFreeze' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white" style={{ fontFamily: 'Inter' }}>Выбрать</button>
                                                     </div>
-                                                    <div className="flex items-center gap-2 mt-3"><label className="text-xs text-slate-400 font-bold w-full">Длительность (сек):</label><input type="number" value={config.freezeDuration} onChange={e => setConfig({...config, freezeDuration: Number(e.target.value)})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-400 font-bold outline-none text-center" /></div>
+                                                    <div className="flex items-center gap-2 mt-3"><label className="text-xs text-slate-400 font-bold w-full">Длительность (сек):</label><input type="number" value={config.freezeDuration} onChange={e => setConfig({...config, freezeDuration: Number(e.target.value)})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-400 font-bold outline-none text-center" style={{ fontFamily: 'Inter' }} /></div>
                                                 </div>
                                                 <div>
                                                     <label className="text-xs text-slate-400 font-bold block mb-2">Подарок РАЗМОРОЗКИ</label>
                                                     <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-700 mb-2">
                                                         {config.giftUnfreeze ? <div className="flex items-center gap-3"><img src={config.giftUnfreeze.icon} className="w-8 h-8"/> <span className="font-bold text-sm text-slate-200">{config.giftUnfreeze.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
-                                                        <button onClick={() => setModal({ isOpen: true, key: 'giftUnfreeze' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white">Выбрать</button>
+                                                        <button onClick={() => setModal({ isOpen: true, key: 'giftUnfreeze' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white" style={{ fontFamily: 'Inter' }}>Выбрать</button>
                                                     </div>
-                                                    <div className="flex items-center gap-2 mt-3"><label className="text-xs text-slate-400 font-bold w-full">Шаг разморозки (сек):</label><input type="number" value={config.unfreezeDuration} onChange={e => setConfig({...config, unfreezeDuration: Number(e.target.value)})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-orange-400 font-bold outline-none text-center" /></div>
+                                                    <div className="flex items-center gap-2 mt-3"><label className="text-xs text-slate-400 font-bold w-full">Шаг разморозки (сек):</label><input type="number" value={config.unfreezeDuration} onChange={e => setConfig({...config, unfreezeDuration: Number(e.target.value)})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-orange-400 font-bold outline-none text-center" style={{ fontFamily: 'Inter' }} /></div>
                                                 </div>
                                             </div>
                                         </div>
@@ -404,9 +420,9 @@
                                             <div className={!config.isMultiplierGiftEnabled ? 'opacity-30 pointer-events-none' : ''}>
                                                 <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-700 mb-4">
                                                     {config.giftMultiplier ? <div className="flex items-center gap-3"><img src={config.giftMultiplier.icon} className="w-8 h-8"/> <span className="font-bold text-sm text-white">{config.giftMultiplier.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
-                                                    <button onClick={() => setModal({ isOpen: true, key: 'giftMultiplier' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white">Выбрать</button>
+                                                    <button onClick={() => setModal({ isOpen: true, key: 'giftMultiplier' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white" style={{ fontFamily: 'Inter' }}>Выбрать</button>
                                                 </div>
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2" style={{ fontFamily: 'Inter' }}>
                                                     <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex items-center"><span className="text-amber-500 font-bold mr-2">x</span><input type="number" value={config.multiplierValue} onChange={e=>setConfig({...config, multiplierValue: Number(e.target.value)})} className="bg-transparent w-full outline-none font-bold text-white"/></div>
                                                     <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex items-center"><input type="number" value={config.multiplierDuration} onChange={e=>setConfig({...config, multiplierDuration: Number(e.target.value)})} className="bg-transparent w-full outline-none font-bold text-white text-right"/><span className="text-slate-500 text-xs ml-2 font-bold">СЕК</span></div>
                                                 </div>
@@ -421,9 +437,9 @@
                                             <div className={!config.isDebuffGiftEnabled ? 'opacity-30 pointer-events-none' : ''}>
                                                 <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-700 mb-4">
                                                     {config.giftDebuff ? <div className="flex items-center gap-3"><img src={config.giftDebuff.icon} className="w-8 h-8"/> <span className="font-bold text-sm text-white">{config.giftDebuff.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
-                                                    <button onClick={() => setModal({ isOpen: true, key: 'giftDebuff' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white">Выбрать</button>
+                                                    <button onClick={() => setModal({ isOpen: true, key: 'giftDebuff' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white" style={{ fontFamily: 'Inter' }}>Выбрать</button>
                                                 </div>
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2" style={{ fontFamily: 'Inter' }}>
                                                     <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex items-center"><span className="text-purple-500 font-bold mr-2">x</span><input type="number" value={config.debuffValue} onChange={e=>setConfig({...config, debuffValue: Number(e.target.value)})} className="bg-transparent w-full outline-none font-bold text-white"/></div>
                                                     <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex items-center"><input type="number" value={config.debuffDuration} onChange={e=>setConfig({...config, debuffDuration: Number(e.target.value)})} className="bg-transparent w-full outline-none font-bold text-white text-right"/><span className="text-slate-500 text-xs ml-2 font-bold">СЕК</span></div>
                                                 </div>
@@ -435,19 +451,36 @@
                                     <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
                                         <div className="flex justify-between items-center mb-4">
                                             <h3 className="font-bold text-white text-lg"><i className="fa-solid fa-wand-magic-sparkles text-indigo-400 mr-2"></i>Кастомные триггеры</h3>
-                                            <button onClick={() => setConfig({...config, customGifts: [...config.customGifts, { id: Date.now().toString(), gift: null, type: 'add', value: 60, isEnabled: true }]})} className="bg-slate-800 px-3 py-1.5 rounded-lg text-sm font-bold text-white"><i className="fa-solid fa-plus"></i> Создать</button>
+                                            <button onClick={() => setConfig({...config, customGifts: [...config.customGifts, { id: Date.now().toString(), gift: null, type: 'add', value: 60, threshold: 0, isEnabled: true }]})} className="bg-slate-800 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ fontFamily: 'Inter' }}><i className="fa-solid fa-plus"></i> Создать</button>
                                         </div>
                                         <div className="space-y-3">
                                             {config.customGifts.map(cg => (
                                                 <div key={cg.id} className="flex gap-3 items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
                                                     <div onClick={() => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, isEnabled: !c.isEnabled}:c)}))} className={`w-10 h-5 rounded-full relative cursor-pointer ${cg.isEnabled ? 'bg-indigo-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${cg.isEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div>
+                                                    
                                                     <div className="flex items-center gap-2 flex-1 bg-slate-900 p-2 rounded-lg border border-slate-700 cursor-pointer" onClick={() => setModal({ isOpen: true, key: `custom_${cg.id}` })}>
-                                                        {cg.gift ? <><img src={cg.gift.icon} className="w-6 h-6"/> <span className="font-bold text-xs text-white">{cg.gift.name}</span></> : <span className="text-slate-500 text-xs font-bold px-2">Выбрать подарок...</span>}
+                                                        {cg.gift ? <><img src={cg.gift.icon} className="w-6 h-6"/> <span className="font-bold text-xs text-white truncate max-w-[150px]">{cg.gift.name}</span></> : <span className="text-slate-500 text-xs font-bold px-2">Выбрать подарок...</span>}
                                                     </div>
-                                                    <select value={cg.type} onChange={e => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, type: e.target.value}:c)}))} className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white outline-none font-bold">
-                                                        <option value="add">+ Добавить время</option><option value="sub">- Отнять время</option><option value="set">= Установить время</option><option value="reset">Обнулить (0)</option>
+                                                    
+                                                    <select value={cg.type} onChange={e => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, type: e.target.value}:c)}))} className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white outline-none font-bold" style={{ fontFamily: 'Inter' }}>
+                                                        <option value="add">+ Добавить время</option>
+                                                        <option value="sub">- Отнять время</option>
+                                                        <option value="sub_threshold">- Отнять (до порога)</option>
+                                                        <option value="set">= Установить время</option>
+                                                        <option value="reset">Обнулить (0)</option>
                                                     </select>
-                                                    {cg.type !== 'reset' && <input type="number" value={cg.value} onChange={e => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, value: Number(e.target.value)}:c)}))} className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-center font-bold text-white outline-none" placeholder="Сек" />}
+                                                    
+                                                    {cg.type !== 'reset' && cg.type !== 'sub_threshold' && (
+                                                        <input type="number" value={cg.value} onChange={e => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, value: Number(e.target.value)}:c)}))} className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-center font-bold text-white outline-none" placeholder="Сек" style={{ fontFamily: 'Inter' }} />
+                                                    )}
+                                                    
+                                                    {cg.type === 'sub_threshold' && (
+                                                        <div className="flex gap-2" style={{ fontFamily: 'Inter' }}>
+                                                            <input type="number" value={cg.value} onChange={e => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, value: Number(e.target.value)}:c)}))} className="w-20 bg-slate-900 border border-rose-700/50 rounded-lg px-2 py-2 text-xs text-center font-bold text-rose-400 outline-none" placeholder="Отнять" title="Сколько секунд отнять" />
+                                                            <input type="number" value={cg.threshold !== undefined ? cg.threshold : 0} onChange={e => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, threshold: Number(e.target.value)}:c)}))} className="w-20 bg-slate-900 border border-emerald-700/50 rounded-lg px-2 py-2 text-xs text-center font-bold text-emerald-400 outline-none" placeholder="Порог" title="Ниже скольки секунд не опускать таймер" />
+                                                        </div>
+                                                    )}
+                                                    
                                                     <button onClick={() => setConfig(p=>({...p, customGifts: p.customGifts.filter(c=>c.id!==cg.id)}))} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:text-rose-500 bg-slate-900 rounded-lg transition"><i className="fa-solid fa-trash"></i></button>
                                                 </div>
                                             ))}
@@ -456,7 +489,6 @@
                                 </div>
                             )}
 
-                            {}
                             {activeTab === 'roulette' && (
                                 <div className="space-y-6 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Рулетка</h2>
@@ -465,7 +497,7 @@
                                             <div><h3 className="font-bold text-white mb-1">Триггер рулетки</h3><p className="text-xs text-slate-400">Подарок, который запускает колесо</p></div>
                                             <div className="flex items-center gap-3 bg-slate-950 px-4 py-2 rounded-xl border border-slate-700">
                                                 {config.giftRoulette ? <div className="flex items-center gap-2"><img src={config.giftRoulette.icon} className="w-6 h-6"/> <span className="font-bold text-sm text-white">{config.giftRoulette.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
-                                                <button onClick={() => setModal({ isOpen: true, key: 'giftRoulette' })} className="ml-2 bg-indigo-600 px-3 py-1 rounded text-xs font-bold text-white">Изменить</button>
+                                                <button onClick={() => setModal({ isOpen: true, key: 'giftRoulette' })} className="ml-2 bg-indigo-600 px-3 py-1 rounded text-xs font-bold text-white" style={{ fontFamily: 'Inter' }}>Изменить</button>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800 cursor-pointer" onClick={() => setConfig({...config, rouletteGiftAddsCost: !config.rouletteGiftAddsCost})}>
@@ -475,20 +507,20 @@
                                     </div>
                                     
                                     <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-                                        <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-white">Слоты колеса</h3><button onClick={() => setConfig({...config, rouletteSlots: [...config.rouletteSlots, { id: Date.now().toString(), label: 'Новый слот', type: 'add_time', value: 60, chance: 10, color: '#6366f1', isEliminable: false, isEnabled: true }]})} className="bg-slate-800 px-3 py-1.5 rounded-lg text-sm font-bold text-white"><i className="fa-solid fa-plus"></i> Слот</button></div>
+                                        <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-white">Слоты колеса</h3><button onClick={() => setConfig({...config, rouletteSlots: [...config.rouletteSlots, { id: Date.now().toString(), label: 'Новый слот', type: 'add_time', value: 60, chance: 10, color: '#6366f1', isEliminable: false, isEnabled: true }]})} className="bg-slate-800 px-3 py-1.5 rounded-lg text-sm font-bold text-white" style={{ fontFamily: 'Inter' }}><i className="fa-solid fa-plus"></i> Слот</button></div>
                                         <div className="space-y-3">
                                             {config.rouletteSlots.map(slot => (
                                                 <div key={slot.id} className={`flex gap-2 items-center bg-slate-950 p-3 rounded-xl border ${slot.isEnabled !== false ? 'border-slate-800' : 'border-slate-800/50 opacity-50'}`}>
                                                     <div onClick={() => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, isEnabled: s.isEnabled === false ? true : false}:s)}))} className={`w-10 h-5 rounded-full relative cursor-pointer ${slot.isEnabled !== false ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${slot.isEnabled !== false ? 'translate-x-5' : 'translate-x-1'}`}></div></div>
                                                     <input type="color" value={slot.color} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, color: e.target.value}:s)}))} className="w-8 h-8 rounded border-none bg-transparent cursor-pointer" />
                                                     <input type="text" value={slot.label} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, label: e.target.value}:s)}))} className="flex-1 min-w-[120px] bg-transparent outline-none font-bold text-white border-b border-slate-700 focus:border-indigo-500 px-2" />
-                                                    <select value={slot.type} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, type: e.target.value}:s)}))} className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white outline-none font-bold">
+                                                    <select value={slot.type} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, type: e.target.value}:s)}))} className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white outline-none font-bold" style={{ fontFamily: 'Inter' }}>
                                                         <option value="add_time">+ Время</option><option value="sub_time">- Время</option><option value="multiply_time">Умножить (*)</option><option value="divide_time">Разделить (/)</option><option value="set_time">= Время</option><option value="multiplier">Бафф x</option><option value="debuff">Дебафф x</option><option value="freeze">Заморозка</option><option value="unfreeze">Разморозка</option><option value="extra_spin">Еще прокрут</option><option value="reset_time">Обнулить</option><option value="special">Приз</option>
                                                     </select>
-                                                    {['multiply_time','divide_time','multiplier','debuff'].includes(slot.type) && <input type="number" value={slot.multiplierValue||2} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, multiplierValue: Number(e.target.value)}:s)}))} className="w-12 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-center font-bold text-white outline-none" />}
-                                                    {['add_time','sub_time','set_time','multiplier','debuff','extra_spin'].includes(slot.type) && <input type="number" value={slot.value} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, value: Number(e.target.value)}:s)}))} className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-center font-bold text-white outline-none" />}
-                                                    <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 w-20"><input type="number" value={slot.chance} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, chance: Number(e.target.value)}:s)}))} className="bg-transparent w-full outline-none text-xs text-right font-bold text-white"/> <span className="text-xs text-slate-500 ml-1 font-bold">%</span></div>
-                                                    <button onClick={() => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, isEliminable: !s.isEliminable}:s)}))} className={`px-2 py-1.5 rounded-lg text-xs font-bold border ${slot.isEliminable ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-900 text-slate-500 border-slate-700'}`}>{slot.isEliminable ? '1 РАЗ' : 'МНОГОР.'}</button>
+                                                    {['multiply_time','divide_time','multiplier','debuff'].includes(slot.type) && <input type="number" value={slot.multiplierValue||2} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, multiplierValue: Number(e.target.value)}:s)}))} className="w-12 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-center font-bold text-white outline-none" style={{ fontFamily: 'Inter' }} />}
+                                                    {['add_time','sub_time','set_time','multiplier','debuff','extra_spin'].includes(slot.type) && <input type="number" value={slot.value} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, value: Number(e.target.value)}:s)}))} className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-center font-bold text-white outline-none" style={{ fontFamily: 'Inter' }} />}
+                                                    <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 w-20" style={{ fontFamily: 'Inter' }}><input type="number" value={slot.chance} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, chance: Number(e.target.value)}:s)}))} className="bg-transparent w-full outline-none text-xs text-right font-bold text-white"/> <span className="text-xs text-slate-500 ml-1 font-bold">%</span></div>
+                                                    <button onClick={() => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, isEliminable: !s.isEliminable}:s)}))} className={`px-2 py-1.5 rounded-lg text-xs font-bold border ${slot.isEliminable ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-900 text-slate-500 border-slate-700'}`} style={{ fontFamily: 'Inter' }}>{slot.isEliminable ? '1 РАЗ' : 'МНОГОР.'}</button>
                                                     <button onClick={() => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.filter(s=>s.id!==slot.id)}))} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:text-rose-500 bg-slate-900 rounded-full"><i className="fa-solid fa-xmark"></i></button>
                                                 </div>
                                             ))}
@@ -503,20 +535,35 @@
                                     <h2 className="text-3xl font-black text-white mb-6">Оформление виджетов</h2>
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-6">
-                                            <h3 className="font-bold text-indigo-400 border-b border-slate-800 pb-2"><i className="fa-solid fa-clock mr-2"></i>Таймер</h3>
+                                            <h3 className="font-bold text-indigo-400 border-b border-slate-800 pb-2"><i className="fa-solid fa-clock mr-2"></i>Таймер и Шрифты</h3>
                                             <div>
-                                                <label className="block text-sm text-slate-400 mb-2 font-bold">Шрифт текста</label>
-                                                <select value={config.styles.fontFamily} onChange={e=>setCfgStyle('fontFamily', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none text-white font-bold">
+                                                <label className="block text-sm text-slate-400 mb-2 font-bold">Шрифт текста (применяется ко всему)</label>
+                                                <select value={config.styles.fontFamily} onChange={e=>setCfgStyle('fontFamily', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none text-white font-bold" style={{ fontFamily: 'Inter' }}>
                                                     <option value="Inter">Inter (Современный)</option>
-                                                    <option value="Bebas Neue">Bebas Neue (Жирный)</option>
+                                                    <option value="Bebas Neue">Bebas Neue (Жирный/Крупный)</option>
                                                     <option value="Montserrat">Montserrat (Округлый)</option>
                                                     <option value="Comic Neue">Comic Neue (Веселый)</option>
                                                     <option value="Oswald">Oswald (Строгий)</option>
                                                     <option value="Pacifico">Pacifico (Рукописный)</option>
+                                                    <option value="Roboto">Roboto (Классика)</option>
+                                                    <option value="Open Sans">Open Sans (Чистый)</option>
+                                                    <option value="Raleway">Raleway (Элегантный)</option>
+                                                    <option value="Nunito">Nunito (Мягкий)</option>
+                                                    <option value="Playfair Display">Playfair Display (Винтаж)</option>
+                                                    <option value="Caveat">Caveat (Небрежный маркер)</option>
+                                                    <option value="Rubik">Rubik (Массивный)</option>
+                                                    <option value="Comfortaa">Comfortaa (Супер-круглый)</option>
+                                                    <option value="Ruslan Display">Ruslan Display (Славянский)</option>
+                                                    <option value="Kelly Slab">Kelly Slab (Квадратный)</option>
+                                                    <option value="Roboto Slab">Roboto Slab (Засечки)</option>
+                                                    <option value="Lobster">Lobster (Ретро скрипт)</option>
+                                                    <option value="Alice">Alice (Сказка)</option>
+                                                    <option value="PT Sans">PT Sans (Строгий 2)</option>
                                                 </select>
+                                                <div className="mt-2 text-xs text-slate-500">Шрифт сразу применяется к панели управления для предпросмотра!</div>
                                             </div>
                                             <div className="flex items-center justify-between">
-                                                <label className="text-sm text-slate-400 font-bold">Основной Цвет</label>
+                                                <label className="text-sm text-slate-400 font-bold">Основной Цвет Таймера</label>
                                                 <input type="color" value={config.styles.timerColor} onChange={e=>setCfgStyle('timerColor', e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-none" />
                                             </div>
                                             <div>
@@ -534,6 +581,8 @@
                                                 <h3 className="font-bold text-emerald-400 border-b border-slate-800 pb-2"><i className="fa-solid fa-bolt mr-2"></i>Цвета Уведомлений</h3>
                                                 <div className="flex items-center justify-between mb-2"><label className="text-sm text-slate-400 font-bold">Цвет Плюса (+ сек)</label><input type="color" value={config.styles.floatPlusColor} onChange={e=>setCfgStyle('floatPlusColor', e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-none" /></div>
                                                 <div className="flex items-center justify-between mb-2"><label className="text-sm text-slate-400 font-bold">Цвет Минуса (- сек)</label><input type="color" value={config.styles.floatMinusColor} onChange={e=>setCfgStyle('floatMinusColor', e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-none" /></div>
+                                                <div className="flex items-center justify-between mb-2"><label className="text-sm text-slate-400 font-bold">Цвет текста "ЛАЙКИ"</label><input type="color" value={config.styles.likeAlertColor || '#f43f5e'} onChange={e=>setCfgStyle('likeAlertColor', e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-none" /></div>
+                                                <div className="flex items-center justify-between"><label className="text-sm text-slate-400 font-bold">Цвет текста "ПОДПИСКА"</label><input type="color" value={config.styles.followAlertColor || '#34d399'} onChange={e=>setCfgStyle('followAlertColor', e.target.value)} className="w-10 h-10 rounded cursor-pointer bg-transparent border-none" /></div>
                                             </div>
                                             
                                             <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
@@ -547,7 +596,6 @@
                                 </div>
                             )}
 
-                            {}
                             {activeTab === 'obs' && (
                                 <div className="space-y-6 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Ссылки для OBS</h2>
@@ -558,7 +606,7 @@
                                             <span className="font-bold text-white mb-2 block"><i className="fa-solid fa-clock text-indigo-400 mr-2"></i>Таймер</span>
                                             <div className="flex gap-2">
                                                 <input type="text" readOnly value={`${window.location.origin}/timer.html?uid=${user.id}`} className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-300 outline-none font-mono" />
-                                                <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/timer.html?uid=${user.id}`)} className="bg-indigo-600 hover:bg-indigo-500 px-6 rounded-lg text-white font-bold transition"><i className="fa-solid fa-copy mr-2"></i>Копировать</button>
+                                                <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/timer.html?uid=${user.id}`)} className="bg-indigo-600 hover:bg-indigo-500 px-6 rounded-lg text-white font-bold transition" style={{ fontFamily: 'Inter' }}><i className="fa-solid fa-copy mr-2"></i>Копировать</button>
                                             </div>
                                         </div>
 
@@ -566,7 +614,7 @@
                                             <span className="font-bold text-white mb-2 block"><i className="fa-solid fa-dice text-purple-400 mr-2"></i>Рулетка</span>
                                             <div className="flex gap-2">
                                                 <input type="text" readOnly value={`${window.location.origin}/rullete.html?uid=${user.id}`} className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-300 outline-none font-mono" />
-                                                <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/rullete.html?uid=${user.id}`)} className="bg-purple-600 hover:bg-purple-500 px-6 rounded-lg text-white font-bold transition"><i className="fa-solid fa-copy mr-2"></i>Копировать</button>
+                                                <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/rullete.html?uid=${user.id}`)} className="bg-purple-600 hover:bg-purple-500 px-6 rounded-lg text-white font-bold transition" style={{ fontFamily: 'Inter' }}><i className="fa-solid fa-copy mr-2"></i>Копировать</button>
                                             </div>
                                         </div>
                                     </div>

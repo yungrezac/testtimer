@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Comic+Neue:wght@700&family=Roboto:wght@700;900&family=Open+Sans:wght@700;800&family=Oswald:wght@700&family=Raleway:wght@800;900&family=Nunito:wght@800;900&family=Playfair+Display:wght@700;900&family=Caveat:wght@700&family=Rubik:wght@700;900&family=Pacifico&family=Yanone+Kaffeesatz:wght@700&family=Comfortaa:wght@700&family=Ruslan+Display&family=Kelly+Slab&family=Roboto+Slab:wght@700;900&family=Lobster&family=Alice&family=PT+Sans:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Comic+Neue:wght@700&family=Roboto:wght@700;900&family=Open+Sans:wght@700;800&family=Oswald:wght@700&family=Pacifico&display=swap');
         
         body { background-color: transparent !important; color: #f8fafc; overflow: hidden; margin: 0; padding: 0;}
         
@@ -54,6 +54,10 @@
             const [alerts, setAlerts] = useState([]); const [config, setConfig] = useState({});
 
             useEffect(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const uid = urlParams.get('uid');
+                if (uid) socket.emit('join-room', uid);
+
                 socket.on('settings-updated', cfg => setConfig(cfg));
                 socket.on('timer-tick', s => setState(s));
                 socket.on('new-alert', data => {

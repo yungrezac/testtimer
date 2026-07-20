@@ -48,7 +48,7 @@ class UserSession {
         this.lastDpDonationId = null;
         this.dxProcessedIds = new Set();
         
-        this.statusText = { tt: { text: 'Ожидание', isActive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' };
+        this.statusText = { tt: { text: 'Ожидание', isActive: false, isStreamLive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' };
         
         this.startEngine();
     }
@@ -105,10 +105,12 @@ class UserSession {
         if (this.timerState.isVictory) return 0;
         if (this.timerState.isFrozen && !ignoreMultiplier) return 0;
 
-        let timeChange = amount;
+        let timeChange = parseInt(amount, 10);
+        if (isNaN(timeChange)) timeChange = 0;
+
         if (this.multiplierState.isActive && !ignoreMultiplier) {
-            if (this.multiplierState.type === 'buff') timeChange = amount > 0 ? amount * this.multiplierState.value : amount;
-            else if (this.multiplierState.type === 'debuff') timeChange = -Math.abs(amount * this.multiplierState.value);
+            if (this.multiplierState.type === 'buff') timeChange = timeChange > 0 ? timeChange * this.multiplierState.value : timeChange;
+            else if (this.multiplierState.type === 'debuff') timeChange = -Math.abs(timeChange * this.multiplierState.value);
         }
         
         let oldTime = this.timerState.timeLeft;
@@ -170,13 +172,13 @@ class UserSession {
         if (this.tikToolWatchdog) { clearTimeout(this.tikToolWatchdog); this.tikToolWatchdog = null; }
         if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
         if (this.ttPingInterval) { clearInterval(this.ttPingInterval); this.ttPingInterval = null; }
-        this.statusText.tt = { text: 'Отключено', isActive: false }; this.broadcastStatus();
+        this.statusText.tt = { text: 'Отключено', isActive: false, isStreamLive: false }; this.broadcastStatus();
     }
 
     connectTikTok(username, apiKey) {
         if (!username || !apiKey) return;
         this.disconnectTikTok();
-        this.statusText.tt = { text: 'Подключение...', isActive: false }; this.broadcastStatus();
+        this.statusText.tt = { text: 'Подключение...', isActive: false, isStreamLive: false }; this.broadcastStatus();
 
         try {
             const wsUrl = `wss://api.tik.tools?uniqueId=${encodeURIComponent(username)}&apiKey=${encodeURIComponent(apiKey.trim())}`;
@@ -185,7 +187,7 @@ class UserSession {
 
             this.tiktokConnection.on('open', () => {
                 this.ttReconnectAttempts = 0;
-                this.statusText.tt = { text: 'Успешно подключено', isActive: true }; this.broadcastStatus();
+                this.statusText.tt = { text: 'Успешно подключено', isActive: true, isStreamLive: false }; this.broadcastStatus();
                 this.emit('play-success-sound', {});
                 
                 this.ttPingInterval = setInterval(() => {
@@ -202,13 +204,20 @@ class UserSession {
             this.tiktokConnection.on('message', (msg) => {
                 if (this.tiktokConnection) this.tiktokConnection.isAlive = true;
                 if (this.tikToolWatchdog) { clearTimeout(this.tikToolWatchdog); this.tikToolWatchdog = setTimeout(() => this.disconnectTikTok(), 180000); }
+                
+                // Если мы получили ЛЮБОЕ сообщение от стрима, значит стрим активен
+                if (!this.statusText.tt.isStreamLive) {
+                    this.statusText.tt.isStreamLive = true;
+                    this.broadcastStatus();
+                }
+
                 try {
                     const events = JSON.parse(msg.toString());
                     (Array.isArray(events) ? events : [events]).forEach(evt => {
                         const eventName = evt.event || evt.type || evt.action; const data = evt.data || evt.payload || evt;
                         if (eventName === 'gift') this.handleTikTokGift(data);
                         else if (eventName === 'like') this.handleTikTokLike(data);
-                        else if (eventName === 'follow') this.handleTikTokFollow(data);
+                        else if (eventName === 'follow' || eventName === 'subscribe' || eventName === 'social') this.handleTikTokFollow(data);
                     });
                 } catch (e) {}
             });
@@ -217,7 +226,7 @@ class UserSession {
                 if (this.ttPingInterval) clearInterval(this.ttPingInterval);
                 if (code === 4001 || code === 4003 || code === 4005 || code === 4404) { this.disconnectTikTok(); } 
                 else {
-                    this.statusText.tt = { text: `Обрыв (${code}). Переподключение...`, isActive: false }; this.broadcastStatus();
+                    this.statusText.tt = { text: `Обрыв (${code}). Переподключение...`, isActive: false, isStreamLive: false }; this.broadcastStatus();
                     this.ttReconnectAttempts++;
                     let delay = this.ttReconnectAttempts >= 3 ? 120000 : (this.ttReconnectAttempts === 2 ? 30000 : 10000);
                     this.reconnectTimeout = setTimeout(() => this.connectTikTok(username, apiKey), delay);
@@ -310,6 +319,19 @@ class UserSession {
                 eventType = customRule.type;
                 if (customRule.type === 'add') addedTime = this.addTime((customRule.value || 0) * count, nickname);
                 else if (customRule.type === 'sub') addedTime = this.addTime(-Math.abs(customRule.value || 0) * count, nickname);
+                else if (customRule.type === 'sub_threshold') {
+                    let targetThreshold = parseInt(customRule.threshold, 10) || 0;
+                    let amountToSub = Math.abs(customRule.value || 0) * count;
+                    let current = this.timerState.timeLeft;
+                    if (current > targetThreshold) {
+                        let targetTime = Math.max(targetThreshold, current - amountToSub);
+                        addedTime = targetTime - current;
+                        this.timerState.timeLeft = targetTime;
+                        if (this.timerState.timeLeft <= 0) this.timerState.forceVictory = true;
+                    } else {
+                        addedTime = 0;
+                    }
+                }
                 else if (customRule.type === 'set') { 
                     let targetTime = customRule.value || 0; addedTime = targetTime - this.timerState.timeLeft; this.timerState.timeLeft = targetTime; 
                     if (this.timerState.timeLeft > 0) { this.timerState.isVictory = false; if (!this.timerState.isBonusPhase && !this.timerState.isRollingBonus) this.timerState.isRunning = true; }
@@ -320,7 +342,7 @@ class UserSession {
             }
         }
 
-        if (addedTime !== 0 || totalCoins > 0 || ['set_time', 'reset_time', 'set', 'reset', 'penalty'].includes(eventType)) { 
+        if (addedTime !== 0 || totalCoins > 0 || ['set_time', 'reset_time', 'set', 'reset', 'penalty', 'sub_threshold'].includes(eventType)) { 
             this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: addedTime, type: eventType, amount: count, targetTime: this.timerState.timeLeft }); 
         }
         this.broadcastTime();
@@ -330,6 +352,8 @@ class UserSession {
         if (this.timerState.isVictory || this.timerState.isRollingBonus) return;
         const batchLikes = parseInt(data.likeCount || 1, 10);
         const apiTotalLikes = parseInt(data.totalLikes, 10);
+        const nickname = data.nickname || data.user?.nickname || 'Зритель';
+        const avatar = data.profilePictureUrl || data.user?.avatarUrl || 'https://via.placeholder.com/48';
         
         if (!isNaN(apiTotalLikes) && apiTotalLikes > this.currentStreamTotalLikes) this.currentStreamTotalLikes = apiTotalLikes;
         else this.currentStreamTotalLikes += batchLikes;
@@ -348,7 +372,7 @@ class UserSession {
 
         if (!this.timerState.settings.likesEnabled) return;
         const limit = parseInt(this.timerState.settings.likeThreshold) || 100;
-        const userId = data.uniqueId || String(Math.random());
+        const userId = data.uniqueId || data.user?.uniqueId || String(Math.random());
         this.timerState.userLikes[userId] = (this.timerState.userLikes[userId] || 0) + batchLikes;
 
         let triggers = Math.floor(this.timerState.userLikes[userId] / limit);
@@ -356,10 +380,11 @@ class UserSession {
             this.timerState.userLikes[userId] -= triggers * limit;
             for (let i = 0; i < triggers; i++) {
                 if (this.timerState.isFrozen) {
-                    this.broadcastAlert({ id: Date.now()+i, username: data.nickname, avatar: data.profilePictureUrl, giftName: "Лайки", timeAdded: 0, type: 'frozen_gift', amount: limit, targetTime: this.timerState.timeLeft });
+                    this.broadcastAlert({ id: Date.now()+i, username: nickname, avatar, giftName: "ЛАЙКИ", timeAdded: 0, type: 'frozen_gift', amount: limit, targetTime: this.timerState.timeLeft });
                 } else {
-                    let addedTime = this.addTime(this.timerState.settings.likeTime, data.nickname, true);
-                    this.broadcastAlert({ id: Date.now()+i, username: data.nickname, avatar: data.profilePictureUrl, timeAdded: addedTime, type: 'like', amount: limit, targetTime: this.timerState.timeLeft });
+                    let amountToAdd = parseInt(this.timerState.settings.likeTime, 10);
+                    let addedTime = this.addTime(amountToAdd, nickname, true);
+                    this.broadcastAlert({ id: Date.now()+i, username: nickname, avatar, giftName: "ЛАЙКИ", timeAdded: addedTime, type: 'like', amount: limit, targetTime: this.timerState.timeLeft });
                 }
             }
         }
@@ -368,14 +393,21 @@ class UserSession {
 
     handleTikTokFollow(data) {
         if (this.timerState.isVictory || this.timerState.isRollingBonus || !this.timerState.settings.subsEnabled) return;
-        const userId = data.uniqueId || String(Math.random());
+        // Иногда события подписки/социальные приходят с разными ключами
+        if (data.action && data.action !== 'follow' && data.action !== 'subscribe') return;
+        
+        const nickname = data.nickname || data.user?.nickname || 'Зритель';
+        const avatar = data.profilePictureUrl || data.user?.avatarUrl || 'https://via.placeholder.com/48';
+        const userId = data.uniqueId || data.user?.uniqueId || String(Math.random());
+        
         if (!this.timerState.subbedUsers.has(userId)) {
             this.timerState.subbedUsers.add(userId);
             if (this.timerState.isFrozen) {
-                this.broadcastAlert({ id: Date.now(), username: data.nickname, avatar: data.profilePictureUrl, giftName: "Подписка", timeAdded: 0, type: 'frozen_gift', targetTime: this.timerState.timeLeft });
+                this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName: "ПОДПИСКА", timeAdded: 0, type: 'frozen_gift', targetTime: this.timerState.timeLeft });
             } else {
-                let addedTime = this.addTime(this.timerState.settings.subTime, data.nickname, true);
-                this.broadcastAlert({ id: Date.now(), username: data.nickname, avatar: data.profilePictureUrl, timeAdded: addedTime, type: 'follow', targetTime: this.timerState.timeLeft });
+                let amountToAdd = parseInt(this.timerState.settings.subTime, 10);
+                let addedTime = this.addTime(amountToAdd, nickname, true);
+                this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName: "ПОДПИСКА", timeAdded: addedTime, type: 'follow', targetTime: this.timerState.timeLeft });
             }
             this.broadcastTime();
         }

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Рулетка (OBS)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { background-color: transparent !important; color: #f8fafc; font-family: 'Inter', sans-serif; overflow: hidden; margin:0; padding:0;}
+        @keyframes bonusPop { 0% { transform: scale(0.5); opacity: 0; filter: blur(10px); } 60% { transform: scale(1.1); opacity: 1; filter: blur(0px); } 100% { transform: scale(1); opacity: 1; filter: blur(0px); } }
+        .bonus-pop { animation: bonusPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .roulette-track-bg { background: linear-gradient(90deg, transparent 0%, rgba(15,23,42,0.6) 20%, rgba(0,0,0,0.85) 50%, rgba(15,23,42,0.6) 80%, transparent 100%); box-shadow: 0 20px 50px rgba(0,0,0,0.7), inset 0 0 40px rgba(0,0,0,0.5); }
+        @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 20px rgba(255,255,255,0.4), inset 0 0 20px rgba(255,255,255,0.2); } 50% { box-shadow: 0 0 50px rgba(255,255,255,0.8), inset 0 0 40px rgba(255,255,255,0.5); } }
+        .target-glow { animation: pulseGlow 1.5s infinite ease-in-out; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in-up { animation: fadeInUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        @keyframes idleEventPop { 0% { opacity: 0; transform: translateY(50px) scale(0.8); } 10%, 90% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(20px) scale(0.9); } }
+        .idle-event-overlay { animation: idleEventPop 4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const socket = io();
+
+        const getStroke = (isThick, isEnabled, extraShadow = '') => {
+            if (isEnabled === false) return extraShadow;
+            const stroke = isThick ? '-0.04em -0.04em 0 #000, 0.04em -0.04em 0 #000, -0.04em 0.04em 0 #000, 0.04em 0.04em 0 #000, -0.04em 0 0 #000, 0.04em 0 0 #000, 0 -0.04em 0 #000, 0 0.04em 0 #000' : '-0.025em -0.025em 0 #000, 0.025em -0.025em 0 #000, -0.025em 0.025em 0 #000, 0.025em 0.025em 0 #000';
+            return extraShadow ? `${stroke}, ${extraShadow}` : stroke;
+        };
+
+        const AutoScaleText = ({ text, defaultSize, minSize, maxChars, className, style, shadow, wrap }) => {
+            if (!text) return null; const threshold = wrap ? maxChars * 1.2 : maxChars;
+            const size = text.length > threshold ? Math.max(minSize, defaultSize * (threshold / text.length)) : defaultSize;
+            return <span className={className} style={{ ...style, fontSize: `${size}rem`, textShadow: shadow, whiteSpace: wrap ? 'normal' : 'word-break', lineHeight: wrap ? '1.1' : 'inherit' }}>{text}</span>;
+        }
+
+        function RouletteView() {
+            const [state, setState] = useState({ isActive: false, isIntro: false, spinMode: 'normal', items: [], offset: 0, transitionDuration: 0, winner: null, isFinished: false, user: null, config: {}, isFrozen: false, freezeTimeLeft: 0 });
+            const [idleAlert, setIdleAlert] = useState(null);
+
+            useEffect(() => {
+                const calculateOffset = (targetIndex) => { const itemW = 192; const gap = 16; return -(targetIndex * (itemW + gap)) + (1200 / 2) - (itemW / 2); };
+
+                socket.on('settings-updated', cfg => setState(p => ({...p, config: cfg})));
+                socket.on('timer-tick', s => setState(p => ({...p, isFrozen: s.isFrozen, freezeTimeLeft: s.freezeTimeLeft})));
+
+                socket.on('new-alert', data => {
+                    if (data.type === 'roulette') return;
+                    setIdleAlert({...data, renderId: Date.now()});
+                    setTimeout(() => setIdleAlert(p => p?.renderId === data.renderId ? null : p), 4000);
+                });
+
+                socket.on('start-roulette', ({ winner, slots, user }) => {
+                    setIdleAlert(null); 
+                    const items = []; for(let i=0; i<60; i++) { items.push(i === 45 ? winner : slots[Math.floor(Math.random() * slots.length)]); }
+                    setState(p => ({ ...p, isActive: true, isIntro: true, spinMode: 'normal', items, offset: 0, transitionDuration: 0, winner, isFinished: false, user }));
+                    
+                    setTimeout(() => {
+                        setState(p => ({ ...p, isIntro: false }));
+                        requestAnimationFrame(() => requestAnimationFrame(() => {
+                            setState(p => ({ ...p, offset: calculateOffset(45) + (Math.random() * 140) - 70, transitionDuration: 5500 }));
+                            setTimeout(() => {
+                                setState(p => ({ ...p, isFinished: true })); socket.emit('apply-roulette-result', { winner, user });
+                                setTimeout(() => { setState(p => ({ ...p, isActive: false })); socket.emit('roulette-animation-finished'); }, 7000); 
+                            }, 5500);
+                        }));
+                    }, 3000);
+                });
+
+                socket.on('start-bonus-roll', (data) => {
+                    setIdleAlert(null);
+                    const min = state.config.bonusMin || 60; const max = state.config.bonusMax || 300; const items = [];
+                    for(let i=0; i<60; i++) { if (i === 45) { items.push({ label: `+${data.amount} СЕК`, color: '#f59e0b', type: 'bonus' }); } else { items.push({ label: `+${Math.floor(Math.random() * (max - min + 1)) + min} СЕК`, color: '#6366f1', type: 'bonus' }); } }
+                    setState(p => ({ ...p, isActive: true, isIntro: true, spinMode: 'bonus', items, offset: 0, transitionDuration: 0, winner: { label: `+${data.amount} СЕК`, color: '#f59e0b' }, isFinished: false, user: { username: data.username, avatar: 'https://cdn-icons-png.flaticon.com/512/1055/1055823.png' } }));
+                    setTimeout(() => {
+                        setState(p => ({ ...p, isIntro: false }));
+                        requestAnimationFrame(() => requestAnimationFrame(() => {
+                            setState(p => ({ ...p, offset: calculateOffset(45) + (Math.random() * 140) - 70, transitionDuration: 5500 }));
+                            setTimeout(() => {
+                                setState(p => ({ ...p, isFinished: true })); socket.emit('bonus-roll-finished', data.amount);
+                                setTimeout(() => setState(p => ({ ...p, isActive: false })), 5000); 
+                            }, 5500);
+                        }));
+                    }, 3000); 
+                });
+
+                return () => socket.removeAllListeners();
+            }, [state.config]);
+
+            const fontFamily = state.config?.styles?.fontFamily || 'Inter'; const enableStroke = state.config?.styles?.enableStroke !== false;
+
+            return (
+                <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-transparent" style={{ fontFamily }}>
+                    
+                    {!state.isActive && state.isFrozen && state.config?.giftUnfreeze && (
+                        <div className="absolute top-[12%] left-1/2 -translate-x-1/2 flex flex-col items-center justify-center z-40 bg-slate-900/80 backdrop-blur-md px-10 py-6 rounded-[2rem] border-4 border-cyan-500/80 shadow-[0_0_40px_rgba(6,182,212,0.6)] animate-pulse">
+                            <span className="text-cyan-400 font-black text-3xl uppercase tracking-widest mb-4 text-center" style={{ textShadow: getStroke(false, enableStroke) }}>Для разморозки<br/>надо отправить:</span>
+                            <div className="flex items-center gap-6"><img src={state.config.giftUnfreeze.icon} className="w-20 h-20 drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]" /><span className="text-white font-black text-6xl drop-shadow-[0_5px_15px_rgba(0,0,0,1)]">x {Math.ceil(state.freezeTimeLeft / (state.config.unfreezeDuration || 60))}</span></div>
+                        </div>
+                    )}
+
+                    {!state.isActive && idleAlert && (
+                        <div className="absolute bottom-[5%] left-0 w-full flex justify-center z-50 pointer-events-none">
+                            <div key={idleAlert.renderId} className="flex flex-col items-center justify-center idle-event-overlay gap-2">
+                                <span className="text-white font-black text-6xl uppercase tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)]" style={{ textShadow: getStroke(true, enableStroke, '0 5px 20px rgba(0,0,0,1)') }}>{idleAlert.username || 'Аноним'}</span>
+                                <div className="flex items-center justify-center gap-6 mt-2 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
+                                    <img src={idleAlert.avatar || 'https://via.placeholder.com/64'} className="w-24 h-24 rounded-full border-[6px] border-white shadow-[0_0_30px_#fff] object-cover bg-slate-900" />
+                                    <i className="fa-solid fa-xmark text-white text-5xl opacity-80" style={{ textShadow: getStroke(false, enableStroke) }}></i>
+                                    {idleAlert.originalType === 'like' || idleAlert.type === 'like' ? <i className="fa-solid fa-heart text-7xl text-rose-500 drop-shadow-[0_0_20px_rgba(244,63,94,0.8)]"></i> : 
+                                     idleAlert.originalType === 'follow' || idleAlert.type === 'follow' ? <i className="fa-solid fa-user-plus text-7xl text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.8)]"></i> : 
+                                     idleAlert.giftIcon ? <img src={idleAlert.giftIcon} className="w-24 h-24 drop-shadow-[0_0_20px_#fff] object-contain" /> : <i className="fa-solid fa-bolt text-7xl text-indigo-400 drop-shadow-[0_0_20px_rgba(99,102,241,0.8)]"></i>}
+                                </div>
+                                <div className="mt-4">
+                                    <span className="font-black text-7xl uppercase tracking-widest text-emerald-400" style={{ textShadow: getStroke(true, enableStroke, `0 10px 40px rgba(0,0,0,0.8), 0 0 50px currentColor`) }}>
+                                        {idleAlert.type === 'freeze' ? '❄ ЗАМОРОЗКА' : idleAlert.type === 'unfreeze' ? '🔥 РАЗМОРОЗКА' : idleAlert.type === 'frozen_gift' ? '❄ ЗАМОРОЖЕН' : idleAlert.type === 'multiplier' ? '⚡ПРИБАВЛЕНИЕ' : idleAlert.type === 'debuff' ? '☠ УБАВЛЕНИЕ' : idleAlert.type === 'reset_time' || idleAlert.type === 'reset' ? 'ОБНУЛЕНИЕ!' : idleAlert.type === 'set_time' || idleAlert.type === 'set' ? `ОСТАЛОСЬ ${Math.floor(idleAlert.targetTime/60)}:${(idleAlert.targetTime%60).toString().padStart(2,'0')}` : idleAlert.timeAdded > 0 ? `+${idleAlert.timeAdded} СЕК` : idleAlert.timeAdded < 0 ? `${idleAlert.timeAdded} СЕК` : idleAlert.giftName || 'ТРИГГЕР'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {state.isActive && (
+                        <div className="absolute top-1/2 left-1/2 flex flex-col items-center justify-center drop-shadow-2xl" style={{ width: '1200px', height: '720px', transform: `translate(-50%, -50%)` }}>
+                            {state.isIntro ? (
+                                <div className="w-full flex flex-col items-center justify-center bonus-pop w-[1200px]">
+                                    {state.spinMode === 'bonus' ? (
+                                        <div className="flex flex-col items-center justify-center text-center bg-black/50 backdrop-blur-xl rounded-[3rem] border-2 border-amber-500/50 shadow-[0_20px_60px_rgba(245,158,11,0.2)] w-[800px] h-[500px] p-8">
+                                            <i className="fa-solid fa-gift text-amber-400 text-7xl mb-6 animate-bounce drop-shadow-[0_0_30px_rgba(251,191,36,0.8)]"></i>
+                                            <h2 className="text-5xl text-white font-black uppercase tracking-widest" style={{ textShadow: getStroke(false, enableStroke, '0 4px 10px rgba(0,0,0,0.8)') }}>Рулетка времени</h2>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center text-center bg-black/50 backdrop-blur-xl rounded-[3rem] border-2 border-indigo-500/50 shadow-[0_20px_60px_rgba(99,102,241,0.2)] w-[800px] min-h-[600px] p-10">
+                                            <h2 className="text-3xl text-indigo-300 font-bold uppercase tracking-widest mb-6" style={{ textShadow: getStroke(false, enableStroke) }}>Вращение запускает</h2>
+                                            {state.user?.isLikesRoulette ? <i className="fa-solid fa-heart text-rose-500 text-[12rem] drop-shadow-[0_0_80px_rgba(244,63,94,0.8)] animate-pulse mb-8"></i> : <img src={state.user?.avatar} className="w-64 h-64 rounded-full border-[6px] border-indigo-500 shadow-[0_0_80px_rgba(99,102,241,0.8)] object-cover bg-slate-800 mb-8" />}
+                                            <AutoScaleText text={state.user?.username} defaultSize={5} minSize={2.5} maxChars={12} className="font-black text-white mb-6 tracking-tight" shadow={getStroke(true, enableStroke, '0 10px 25px rgba(0,0,0,0.8)')} />
+                                            {state.user?.triggerGift && (
+                                                <div className="flex items-center gap-4 bg-slate-900/80 px-8 py-4 rounded-2xl border border-white/20 shadow-2xl mt-2"><span className="text-slate-300 font-bold text-2xl uppercase">Триггер:</span><img src={state.user.triggerGift.icon} className="w-14 h-14" /><AutoScaleText text={state.user.triggerGift.name} defaultSize={2.5} minSize={1.5} maxChars={15} className="text-white font-black" shadow={getStroke(false, enableStroke)} /></div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : !state.isFinished ? (
+                                <div className="w-[1200px] flex flex-col items-center animate-fade-in-up">
+                                    <div className="bg-black/50 backdrop-blur-xl rounded-[2rem] px-8 py-4 flex items-center gap-6 mb-10 border border-white/10 shadow-[0_15px_50px_rgba(0,0,0,0.6)]">
+                                        {state.spinMode === 'bonus' ? <><i className="fa-solid fa-clock text-amber-400 text-4xl"></i><span className="text-white font-black text-3xl uppercase tracking-widest" style={{ textShadow: getStroke(false, enableStroke) }}>Бонусная рулетка</span></> : 
+                                        <>{state.user?.isLikesRoulette ? <i className="fa-solid fa-heart text-rose-500 text-5xl"></i> : <img src={state.user?.avatar} className="w-16 h-16 rounded-full border-2 border-white/30 object-cover" />}
+                                        <div className="flex flex-col"><AutoScaleText text={state.user?.username} defaultSize={1.5} minSize={0.8} maxChars={15} className="text-white font-black leading-none mb-1 text-left" shadow={getStroke(false, enableStroke)} /><span className="text-indigo-300 font-bold text-sm tracking-wider uppercase">Крутит колесо</span></div></>}
+                                    </div>
+                                    <div className="relative w-full h-[200px] roulette-track-bg rounded-[2rem] overflow-hidden backdrop-blur-md border border-white/10">
+                                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-1.5 bg-white z-30 shadow-[0_0_20px_#fff,0_0_40px_rgba(255,255,255,0.8)] rounded-full"></div>
+                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[216px] h-[160px] border-4 border-white/80 rounded-[1.25rem] z-20 target-glow"></div>
+                                        <div className="flex h-full absolute left-0 items-center px-0" style={{ transform: `translateX(${state.offset}px)`, transition: `transform ${state.transitionDuration}ms cubic-bezier(0.1, 0.85, 0.15, 1)`, gap: '16px' }}>
+                                            {state.items.map((item, i) => (
+                                                <div key={i} className="w-48 h-36 flex-shrink-0 rounded-2xl flex items-center justify-center border-[3px] border-white/20 shadow-xl relative overflow-hidden px-2" style={{ backgroundColor: item.color || '#3b82f6' }}>
+                                                    <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-black/40"></div>
+                                                    <AutoScaleText text={item.label} defaultSize={2} minSize={0.8} maxChars={8} wrap={true} className="text-white font-black text-center leading-tight uppercase relative z-10" shadow={getStroke(false, enableStroke, '0 2px 5px rgba(0,0,0,1)')} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="w-[1200px] flex flex-col items-center justify-center bonus-pop drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
+                                    <div className="bg-black/60 backdrop-blur-xl rounded-[3rem] border-4 flex flex-col items-center justify-center w-[900px] min-h-[700px] p-10" style={{ borderColor: state.winner.color, boxShadow: `0 0 80px ${state.winner.color}60` }}>
+                                        {state.spinMode === 'bonus' ? <span className="text-4xl text-slate-300 font-bold uppercase tracking-widest mb-6" style={{ textShadow: getStroke(false, enableStroke) }}>Бонус:</span> : 
+                                        <div className="flex flex-col items-center gap-4 mb-6 text-center">
+                                            {state.user?.isLikesRoulette ? <i className="fa-solid fa-heart text-rose-500 text-[10rem] animate-pulse"></i> : <img src={state.user?.avatar} className="w-56 h-56 rounded-full border-[6px] border-indigo-500" />}
+                                            <AutoScaleText text={state.user?.username} defaultSize={4.5} minSize={2} maxChars={12} className="font-black text-white leading-none mb-6" shadow={getStroke(true, enableStroke, '0 6px 15px rgba(0,0,0,0.6)')} />
+                                            <span className="text-slate-300 font-bold uppercase text-3xl tracking-widest" style={{ textShadow: getStroke(false, enableStroke) }}>Выбивает:</span>
+                                        </div>}
+                                        <AutoScaleText text={state.winner.label} defaultSize={6.5} minSize={2.5} maxChars={12} wrap={true} className="leading-[1] font-black text-white text-center transform hover:scale-105 transition-transform" shadow={getStroke(true, enableStroke, `0px 10px 40px ${state.winner.color}, 0px 0px 80px ${state.winner.color}`)} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<RouletteView />);
+    </script>
+</body>
+</html>

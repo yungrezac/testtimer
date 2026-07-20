@@ -14,7 +14,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Comic+Neue:wght@700&family=Roboto:wght@700;900&family=Oswald:wght@700&family=Pacifico&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Comic+Neue:wght@700&family=Roboto:wght@700;900&family=Open+Sans:wght@700;800&family=Oswald:wght@700&family=Raleway:wght@800;900&family=Nunito:wght@800;900&family=Playfair+Display:wght@700;900&family=Caveat:wght@700&family=Rubik:wght@700;900&family=Pacifico&family=Yanone+Kaffeesatz:wght@700&family=Comfortaa:wght@700&family=Ruslan+Display&family=Kelly+Slab&family=Roboto+Slab:wght@700;900&family=Lobster&family=Alice&family=PT+Sans:wght@700&display=swap');
+        
         body { background-color: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; overflow: hidden; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -22,8 +23,12 @@
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 
+        @keyframes shake { 0%, 100% { transform: translateX(-50%); } 20%, 60% { transform: translateX(calc(-50% - 10px)); } 40%, 80% { transform: translateX(calc(-50% + 10px)); } }
+        .animate-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-fade-in-up { animation: fadeInUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        @keyframes progress-shimmer { 0% { background-position: 0 0; } 100% { background-position: 40px 0; } }
+        .animate-progress-shimmer { background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent); background-size: 40px 40px; animation: progress-shimmer 1s linear infinite; }
         .tab-active { background: linear-gradient(135deg, rgba(99,102,241,0.2) 0%, rgba(168,85,247,0.2) 100%); border-right: 3px solid #818cf8; color: white; }
         .tab-inactive { color: #94a3b8; }
         .tab-inactive:hover { background: #1e293b; color: white; }
@@ -39,6 +44,7 @@
         const { useState, useEffect, useRef } = React;
         const socket = io();
 
+        // Укажите ВАШИ ключи Supabase здесь!
         const supabaseUrl = 'https://lqjagftaeejdufwwvjwd.supabase.co';
         const supabaseKey = 'sb_publishable_6-9IBhMX9CMVbIackZAJ9g_UUk5FDqx'; 
         const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -52,6 +58,7 @@
         socket.on('check-and-save-gift', async (gift) => {
             if (!gift || !gift.gift_id || knownGiftsCache.has(gift.gift_id)) return;
             try {
+                // Используем оригинальную таблицу для подарков
                 const { error } = await supabase.from('gift_library').upsert([{ gift_id: gift.gift_id, name: gift.name, icon: gift.icon, cost: gift.cost }], { onConflict: 'gift_id' });
                 if (!error) knownGiftsCache.add(gift.gift_id);
             } catch (err) { }
@@ -120,12 +127,28 @@
                         </div>
                     )}
 
+                    {state.likesRouletteEnabled && (
+                        <div className="w-full mb-4 shrink-0 bg-slate-800/50 p-3 rounded-xl border border-slate-700 shadow-inner">
+                            <div className="flex justify-between items-end mb-2">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider"><i className="fa-solid fa-heart text-rose-500 mr-1 animate-pulse"></i> До рулетки</span>
+                                <span className="text-xs font-black text-rose-400">{Math.max(0, ((Math.floor((state.currentTotalLikes || 0) / (state.likesRouletteThreshold || 100000)) + 1) * (state.likesRouletteThreshold || 100000)) - (state.currentTotalLikes || 0)).toLocaleString()} лайков</span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-700 relative">
+                                <div className="h-full bg-gradient-to-r from-rose-600 to-purple-600 animate-progress-shimmer transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, (((state.currentTotalLikes || 0) % (state.likesRouletteThreshold || 100000)) / (state.likesRouletteThreshold || 100000)) * 100))}%` }}></div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="w-full mb-4 shrink-0">
                         <div className="grid grid-cols-4 gap-2 mb-4">
                             {[60, 300, 600, 1800].map(s => <button key={`a${s}`} className="bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 rounded-lg py-1 text-xs font-black transition" onClick={() => socket.emit('manual-add', s)}>+{s/60}м</button>)}
                             {[60, 300, 600, 1800].map(s => <button key={`s${s}`} className="bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/30 rounded-lg py-1 text-xs font-black transition" onClick={() => socket.emit('manual-sub', s)}>-{s/60}м</button>)}
                         </div>
                         <input type="number" value={customSeconds} onChange={e => setCustomSeconds(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 font-black text-xl text-center text-white outline-none mb-2" />
+                        <div className="grid grid-cols-2 gap-2">
+                            <button className="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2" onClick={() => socket.emit('manual-add', customSeconds)}><i className="fa-solid fa-plus"></i></button>
+                            <button className="bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2" onClick={() => socket.emit('manual-sub', customSeconds)}><i className="fa-solid fa-minus"></i></button>
+                        </div>
                         <div className="grid grid-cols-2 gap-2 mt-2">
                             <button className="bg-cyan-600 hover:bg-cyan-500 text-white py-2 rounded-xl text-sm font-bold transition flex justify-center items-center gap-1.5" onClick={() => socket.emit('manual-freeze')}><i className="fa-solid fa-snowflake"></i> + Фриз</button>
                             <button className="bg-orange-600 hover:bg-orange-500 text-white py-2 rounded-xl text-sm font-bold transition flex justify-center items-center gap-1.5" onClick={() => socket.emit('manual-unfreeze')}><i className="fa-solid fa-fire"></i> - Фриз</button>
@@ -190,8 +213,12 @@
             const [isRemoteOpen, setIsRemoteOpen] = useState(false);
 
             const defConfig = {
-                username: '', ttApiKey: '', initialTime: 60, bonusEnabled: true, bonusMin: 60, bonusMax: 300,
+                username: '', ttApiKey: '', daToken: '', dpApiKey: '', dxToken: '', 
+                initialTime: 60, bonusEnabled: true, bonusMin: 60, bonusMax: 300,
                 isFreezeEnabled: false, giftFreeze: null, freezeDuration: 60, giftUnfreeze: null, unfreezeDuration: 60,
+                isPenaltyEnabled: true, penaltyAmount: 600, penaltyThreshold: 300, giftPenalty: null,
+                isSetTimeEnabled: true, giftSetTime: null, setTimeValue: 300, 
+                isResetEnabled: true, giftReset: null,
                 isMultiplierGiftEnabled: true, multiplierValue: 2, multiplierDuration: 60, giftMultiplier: null,
                 isDebuffGiftEnabled: false, debuffValue: 2, debuffDuration: 60, giftDebuff: null,
                 likesEnabled: true, likeThreshold: 100, likeTime: 10, likesRouletteEnabled: false, likesRouletteThreshold: 100000, 
@@ -205,13 +232,13 @@
 
             const formatPayload = (data) => ({
                 ...data,
-                giftRouletteIds: data.giftRoulette?.ids || [], giftMultiplierIds: data.giftMultiplier?.ids || [], giftDebuffIds: data.giftDebuff?.ids || [], giftFreezeIds: data.giftFreeze?.ids || [], giftUnfreezeIds: data.giftUnfreeze?.ids || [],
+                giftPenaltyIds: data.giftPenalty?.ids || [], giftSetTimeIds: data.giftSetTime?.ids || [], giftResetIds: data.giftReset?.ids || [], giftRouletteIds: data.giftRoulette?.ids || [], giftMultiplierIds: data.giftMultiplier?.ids || [], giftDebuffIds: data.giftDebuff?.ids || [], giftFreezeIds: data.giftFreeze?.ids || [], giftUnfreezeIds: data.giftUnfreeze?.ids || [],
                 customTriggers: data.customGifts.filter(cg => cg.gift).map(cg => ({ ids: cg.gift.ids || [], type: cg.type, value: cg.value, isEnabled: cg.isEnabled }))
             });
 
-            // Загрузка настроек с Supabase
             useEffect(() => {
                 socket.emit('join-room', user.id);
+                // Загружаем настройки пользователя из Supabase
                 supabase.from('ttimer_settings').select('config').eq('user_id', user.id).single().then(({ data, error }) => {
                     if (data && data.config) {
                         const merged = { ...defConfig, ...data.config, styles: { ...defConfig.styles, ...(data.config.styles || {}) } };
@@ -219,9 +246,10 @@
                         socket.emit('update-settings', formatPayload(merged));
                     }
                 });
-                
+
                 socket.on('status-update', s => setStatus(s));
                 socket.on('timer-tick', s => setIsRunning(s.isRunning));
+                window.addEventListener('message', (e) => { if (e.data && e.data.type === 'da_auth') { const hash = new URLSearchParams(e.data.hash); const token = hash.get('access_token'); if (token) socket.emit('connect-da-token', token); } });
                 return () => { socket.off('status-update'); socket.off('timer-tick'); };
             }, [user.id]);
 
@@ -233,7 +261,7 @@
             const handleCancel = () => { setConfig(savedConfig); };
             const setCfgStyle = (key, val) => setConfig(p => ({...p, styles: {...p.styles, [key]: val}}));
 
-            const TabBtn = ({ id, icon, text }) => ( <button onClick={() => { setActiveTab(id); }} className={`w-full flex items-center gap-3 px-6 py-4 font-semibold transition ${activeTab === id ? 'tab-active' : 'tab-inactive'}`}><i className={icon + " w-5 text-center text-lg"}></i> {text}</button> );
+            const TabBtn = ({ id, icon, text }) => ( <button onClick={() => { if(hasChanges) { document.getElementById('save-bar')?.classList.add('animate-shake'); setTimeout(()=>document.getElementById('save-bar')?.classList.remove('animate-shake'), 400); return;} setActiveTab(id); }} className={`w-full flex items-center gap-3 px-6 py-4 font-semibold transition ${activeTab === id ? 'tab-active' : 'tab-inactive'}`}><i className={icon + " w-5 text-center text-lg"}></i> {text}</button> );
 
             return (
                 <div className="flex h-screen bg-slate-950 font-sans text-slate-200">
@@ -243,7 +271,7 @@
                         </div>
                         <nav className="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
                             <TabBtn id="connect" icon="fa-solid fa-wifi" text="Подключения" />
-                            <TabBtn id="timer" icon="fa-solid fa-clock" text="Таймер и События" />
+                            <TabBtn id="timer" icon="fa-solid fa-clock" text="Лайки, Время, Сабы" />
                             <TabBtn id="buffs" icon="fa-solid fa-bolt" text="Триггеры" />
                             <TabBtn id="roulette" icon="fa-solid fa-dice" text="Рулетка" />
                             <TabBtn id="style" icon="fa-solid fa-palette" text="Оформление" />
@@ -253,32 +281,223 @@
                             {isRunning ? (
                                 <button onClick={() => socket.emit('stop-timer')} className="w-full bg-rose-600/20 text-rose-500 border border-rose-500/50 py-3 rounded-xl font-bold transition flex justify-center items-center gap-2 hover:bg-rose-600 hover:text-white"><i className="fa-solid fa-stop"></i> Стоп</button>
                             ) : (
-                                <button onClick={() => { socket.emit('start-timer', formatPayload(config)); }} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl font-bold transition flex justify-center items-center gap-2 hover:opacity-90 shadow-[0_0_15px_rgba(99,102,241,0.4)]"><i className="fa-solid fa-play"></i> ЗАПУСК</button>
+                                <button onClick={() => { if(hasChanges) return; socket.emit('start-timer', formatPayload(config)); }} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-xl font-bold transition flex justify-center items-center gap-2 hover:opacity-90 shadow-[0_0_15px_rgba(99,102,241,0.4)]"><i className="fa-solid fa-play"></i> ЗАПУСК</button>
                             )}
                             <button onClick={() => setIsRemoteOpen(!isRemoteOpen)} className="w-full bg-slate-800 hover:bg-slate-700 py-2 rounded-xl text-xs font-semibold flex justify-center items-center gap-1.5 transition text-emerald-400"><i className="fa-solid fa-gamepad"></i> {isRemoteOpen ? 'Закрыть Пульт' : 'Открыть Пульт'}</button>
-                            <button onClick={onLogout} className="w-full text-rose-500 hover:text-rose-400 text-xs mt-2 transition">Выйти ({user.email})</button>
+                            <button onClick={onLogout} className="w-full text-rose-500 hover:text-rose-400 text-xs mt-2 transition">Выйти из аккаунта ({user.email})</button>
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-8 relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950 pb-32">
-                        <div className="max-w-[1000px] mx-auto space-y-6">
+                        <div className="max-w-[1200px] mx-auto space-y-6">
                             
-                            {/* ПОДКЛЮЧЕНИЯ */}
+                            {}
                             {activeTab === 'connect' && (
                                 <div className="space-y-4 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Подключения</h2>
+                                    
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-cyan-500/30 transition">
                                         <div className="w-12 h-12 bg-cyan-500/10 flex items-center justify-center rounded-full border border-cyan-500/20 shrink-0"><i className="fa-brands fa-tiktok text-cyan-400 text-2xl"></i></div>
                                         <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isActive ? 'text-emerald-400' : 'text-slate-500'}`}>{status.tt.text}</span></div>
                                         <div className="flex-1 flex gap-2">
-                                            {!status.tt.isActive && <><input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /><input type="text" value={config.ttApiKey} onChange={e=>setConfig({...config, ttApiKey: e.target.value})} placeholder="API Key" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /></>}
+                                            {!status.tt.isActive && <><input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /><input type="text" value={config.ttApiKey} onChange={e=>setConfig({...config, ttApiKey: e.target.value})} placeholder="API Key (tik.tools)" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /></>}
                                         </div>
                                         <button onClick={() => { status.tt.isActive ? socket.emit('disconnect-tiktok') : socket.emit('connect-tiktok', { username: config.username, apiKey: config.ttApiKey }) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.tt.isActive ? 'bg-rose-600 hover:bg-rose-500' : 'bg-cyan-600 hover:bg-cyan-500'}`}>{status.tt.isActive ? 'Отключить' : 'Подключить'}</button>
+                                    </div>
+
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-orange-500/30 transition">
+                                        <div className="w-12 h-12 bg-orange-500/10 flex items-center justify-center rounded-full border border-orange-500/20 shrink-0"><i className="fa-solid fa-shield-halved text-orange-400 text-xl"></i></div>
+                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">DonationAlerts</h3><span className={`text-[11px] font-bold ${status.da.includes('Успешно') ? 'text-emerald-400' : 'text-slate-500'}`}>{status.da}</span></div>
+                                        <div className="flex-1"></div>
+                                        <button onClick={() => { status.da.includes('Успешно') ? socket.emit('disconnect-da') : window.open(`https://www.donationalerts.com/oauth/authorize?client_id=12952&response_type=token&scope=oauth-user-show%20oauth-donation-subscribe&redirect_uri=${window.location.origin}/da-callback`, '_blank', 'width=500,height=700') }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.da.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-orange-600 hover:bg-orange-500'}`}>{status.da.includes('Успешно') ? 'Отключить' : 'Авторизоваться'}</button>
+                                    </div>
+
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-blue-500/30 transition">
+                                        <div className="w-12 h-12 bg-blue-500/10 flex items-center justify-center rounded-full border border-blue-500/20 shrink-0"><i className="fa-solid fa-wallet text-blue-400 text-xl"></i></div>
+                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">DonatePay</h3><span className={`text-[11px] font-bold ${status.dp.includes('Успешно') ? 'text-emerald-400' : 'text-slate-500'}`}>{status.dp}</span></div>
+                                        <div className="flex-1 flex gap-2">{!status.dp.includes('Успешно') && <input type="text" value={config.dpApiKey} onChange={e=>setConfig({...config, dpApiKey: e.target.value})} placeholder="API Key" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />}</div>
+                                        <button onClick={() => { status.dp.includes('Успешно') ? socket.emit('disconnect-dp') : socket.emit('connect-dp', config.dpApiKey) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.dp.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-blue-600 hover:bg-blue-500'}`}>{status.dp.includes('Успешно') ? 'Отключить' : 'Подключить'}</button>
+                                    </div>
+
+                                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-purple-500/30 transition">
+                                        <div className="w-12 h-12 bg-purple-500/10 flex items-center justify-center rounded-full border border-purple-500/20 shrink-0"><i className="fa-solid fa-bolt text-purple-400 text-xl"></i></div>
+                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">DonateX.gg</h3><span className={`text-[11px] font-bold ${status.dx.includes('Успешно') ? 'text-emerald-400' : 'text-slate-500'}`}>{status.dx}</span></div>
+                                        <div className="flex-1 flex gap-2">{!status.dx.includes('Успешно') && <input type="text" value={config.dxToken} onChange={e=>setConfig({...config, dxToken: e.target.value})} placeholder="External Token" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />}</div>
+                                        <button onClick={() => { status.dx.includes('Успешно') ? socket.emit('disconnect-dx') : socket.emit('connect-dx', config.dxToken) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.dx.includes('Успешно') ? 'bg-rose-600 hover:bg-rose-500' : 'bg-purple-600 hover:bg-purple-500'}`}>{status.dx.includes('Успешно') ? 'Отключить' : 'Подключить'}</button>
                                     </div>
                                 </div>
                             )}
 
-                            {/* СТИЛИ / ОФОРМЛЕНИЕ */}
+                            {}
+                            {activeTab === 'timer' && (
+                                <div className="space-y-6 animate-fade-in-up">
+                                    <h2 className="text-3xl font-black text-white mb-6">Лайки, Время, Подписки</h2>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+                                            <h3 className="font-bold text-slate-300 mb-4">Начальное время (мин)</h3>
+                                            <input type="number" value={config.initialTime} onChange={e => setConfig({...config, initialTime: Number(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none focus:border-indigo-500 text-white" />
+                                        </div>
+                                        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl flex flex-col justify-center gap-4">
+                                            <div className={`flex justify-between items-center bg-slate-800/50 p-3 rounded-xl border ${config.likesEnabled ? 'border-emerald-500/50' : 'border-slate-700'} transition-all`}>
+                                                <div className="flex items-center gap-3"><div onClick={() => setConfig({...config, likesEnabled: !config.likesEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.likesEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.likesEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div><span className="text-sm font-semibold text-white">За <input type="number" value={config.likeThreshold} onChange={e => setConfig({...config, likeThreshold: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 border border-slate-600 outline-none" /> лайков</span></div>
+                                                <div className="flex items-center"><input type="number" value={config.likeTime} onChange={e => setConfig({...config, likeTime: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 text-emerald-400 font-bold border border-slate-600 outline-none" /><span className="text-emerald-400 font-bold ml-1">сек</span></div>
+                                            </div>
+                                            <div className={`flex justify-between items-center bg-slate-800/50 p-3 rounded-xl border ${config.likesRouletteEnabled ? 'border-purple-500/50' : 'border-slate-700'} transition-all`}>
+                                                <div className="flex items-center gap-3"><div onClick={() => setConfig({...config, likesRouletteEnabled: !config.likesRouletteEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.likesRouletteEnabled ? 'bg-purple-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.likesRouletteEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div><span className="text-sm font-semibold text-white">Рулетка за общие лайки</span></div>
+                                                <div className="flex items-center"><input type="number" value={config.likesRouletteThreshold} onChange={e => setConfig({...config, likesRouletteThreshold: Number(e.target.value)})} className="w-20 bg-slate-950 text-center rounded py-1 text-purple-400 font-bold border border-slate-600 outline-none" /></div>
+                                            </div>
+                                            <div className={`flex justify-between items-center bg-slate-800/50 p-3 rounded-xl border ${config.subsEnabled ? 'border-emerald-500/50' : 'border-slate-700'} transition-all`}>
+                                                <div className="flex items-center gap-3"><div onClick={() => setConfig({...config, subsEnabled: !config.subsEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.subsEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.subsEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div><span className="text-sm font-semibold text-white">Новый Подписчик</span></div>
+                                                <div className="flex items-center"><input type="number" value={config.subTime} onChange={e => setConfig({...config, subTime: Number(e.target.value)})} className="w-16 bg-slate-950 text-center rounded py-1 text-emerald-400 font-bold border border-slate-600 outline-none" /><span className="text-emerald-400 font-bold ml-1">сек</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-900 border border-indigo-500/30 p-6 rounded-2xl shadow-xl">
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <div onClick={() => setConfig({...config, bonusEnabled: !config.bonusEnabled})} className={`w-14 h-7 rounded-full relative cursor-pointer ${config.bonusEnabled ? 'bg-indigo-500' : 'bg-slate-700'}`}><div className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-transform ${config.bonusEnabled ? 'translate-x-8' : 'translate-x-1'}`}></div></div>
+                                            <h3 className="text-xl font-bold text-white">Бонусное время при нуле</h3>
+                                        </div>
+                                        <div className={`grid grid-cols-2 gap-4 ${!config.bonusEnabled && 'opacity-30 pointer-events-none'}`}>
+                                            <div><label className="text-xs text-slate-400 font-bold mb-1 block">Минимум (сек)</label><input type="number" value={config.bonusMin} onChange={e => setConfig({...config, bonusMin: Number(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-indigo-300 font-bold outline-none" /></div>
+                                            <div><label className="text-xs text-slate-400 font-bold mb-1 block">Максимум (сек)</label><input type="number" value={config.bonusMax} onChange={e => setConfig({...config, bonusMax: Number(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-indigo-300 font-bold outline-none" /></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {}
+                            {activeTab === 'buffs' && (
+                                <div className="space-y-6 animate-fade-in-up">
+                                    <h2 className="text-3xl font-black text-white mb-6">Триггеры и Баффы</h2>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        {/* Заморозка */}
+                                        <div className={`bg-slate-900 border ${config.isFreezeEnabled ? 'border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.1)]' : 'border-slate-800'} p-6 rounded-2xl transition col-span-2`}>
+                                            <div className="flex justify-between items-center mb-6">
+                                                <div className="flex items-center gap-2"><i className="fa-solid fa-snowflake text-cyan-500 text-xl"></i><h3 className="font-bold text-white text-lg">Заморозка таймера</h3></div>
+                                                <div onClick={() => setConfig({...config, isFreezeEnabled: !config.isFreezeEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.isFreezeEnabled ? 'bg-cyan-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.isFreezeEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div>
+                                            </div>
+                                            <div className={`grid grid-cols-2 gap-6 ${!config.isFreezeEnabled && 'opacity-30 pointer-events-none'}`}>
+                                                <div>
+                                                    <label className="text-xs text-slate-400 font-bold block mb-2">Подарок ЗАМОРОЗКИ</label>
+                                                    <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-700 mb-2">
+                                                        {config.giftFreeze ? <div className="flex items-center gap-3"><img src={config.giftFreeze.icon} className="w-8 h-8"/> <span className="font-bold text-sm text-slate-200">{config.giftFreeze.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
+                                                        <button onClick={() => setModal({ isOpen: true, key: 'giftFreeze' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white">Выбрать</button>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-3"><label className="text-xs text-slate-400 font-bold w-full">Длительность (сек):</label><input type="number" value={config.freezeDuration} onChange={e => setConfig({...config, freezeDuration: Number(e.target.value)})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-400 font-bold outline-none text-center" /></div>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-slate-400 font-bold block mb-2">Подарок РАЗМОРОЗКИ</label>
+                                                    <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-700 mb-2">
+                                                        {config.giftUnfreeze ? <div className="flex items-center gap-3"><img src={config.giftUnfreeze.icon} className="w-8 h-8"/> <span className="font-bold text-sm text-slate-200">{config.giftUnfreeze.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
+                                                        <button onClick={() => setModal({ isOpen: true, key: 'giftUnfreeze' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white">Выбрать</button>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-3"><label className="text-xs text-slate-400 font-bold w-full">Шаг разморозки (сек):</label><input type="number" value={config.unfreezeDuration} onChange={e => setConfig({...config, unfreezeDuration: Number(e.target.value)})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-orange-400 font-bold outline-none text-center" /></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className={`bg-slate-900 border ${config.isMultiplierGiftEnabled ? 'border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.1)]' : 'border-slate-800'} p-6 rounded-2xl transition`}>
+                                            <div className="flex justify-between items-center mb-6">
+                                                <div className="flex items-center gap-2"><i className="fa-solid fa-bolt text-amber-500 text-xl"></i><h3 className="font-bold text-white">Прибавление Х</h3></div>
+                                                <div onClick={() => setConfig({...config, isMultiplierGiftEnabled: !config.isMultiplierGiftEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.isMultiplierGiftEnabled ? 'bg-amber-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.isMultiplierGiftEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div>
+                                            </div>
+                                            <div className={!config.isMultiplierGiftEnabled ? 'opacity-30 pointer-events-none' : ''}>
+                                                <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-700 mb-4">
+                                                    {config.giftMultiplier ? <div className="flex items-center gap-3"><img src={config.giftMultiplier.icon} className="w-8 h-8"/> <span className="font-bold text-sm text-white">{config.giftMultiplier.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
+                                                    <button onClick={() => setModal({ isOpen: true, key: 'giftMultiplier' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white">Выбрать</button>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex items-center"><span className="text-amber-500 font-bold mr-2">x</span><input type="number" value={config.multiplierValue} onChange={e=>setConfig({...config, multiplierValue: Number(e.target.value)})} className="bg-transparent w-full outline-none font-bold text-white"/></div>
+                                                    <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex items-center"><input type="number" value={config.multiplierDuration} onChange={e=>setConfig({...config, multiplierDuration: Number(e.target.value)})} className="bg-transparent w-full outline-none font-bold text-white text-right"/><span className="text-slate-500 text-xs ml-2 font-bold">СЕК</span></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className={`bg-slate-900 border ${config.isDebuffGiftEnabled ? 'border-purple-500/50 shadow-[0_0_20px_rgba(168,85,247,0.1)]' : 'border-slate-800'} p-6 rounded-2xl transition`}>
+                                            <div className="flex justify-between items-center mb-6">
+                                                <div className="flex items-center gap-2"><i className="fa-solid fa-skull text-purple-500 text-xl"></i><h3 className="font-bold text-white">Убавление Х</h3></div>
+                                                <div onClick={() => setConfig({...config, isDebuffGiftEnabled: !config.isDebuffGiftEnabled})} className={`w-10 h-5 rounded-full relative cursor-pointer ${config.isDebuffGiftEnabled ? 'bg-purple-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.isDebuffGiftEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div>
+                                            </div>
+                                            <div className={!config.isDebuffGiftEnabled ? 'opacity-30 pointer-events-none' : ''}>
+                                                <div className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-700 mb-4">
+                                                    {config.giftDebuff ? <div className="flex items-center gap-3"><img src={config.giftDebuff.icon} className="w-8 h-8"/> <span className="font-bold text-sm text-white">{config.giftDebuff.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
+                                                    <button onClick={() => setModal({ isOpen: true, key: 'giftDebuff' })} className="bg-slate-800 text-xs font-bold px-3 py-1.5 rounded-lg text-white">Выбрать</button>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex items-center"><span className="text-purple-500 font-bold mr-2">x</span><input type="number" value={config.debuffValue} onChange={e=>setConfig({...config, debuffValue: Number(e.target.value)})} className="bg-transparent w-full outline-none font-bold text-white"/></div>
+                                                    <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 flex items-center"><input type="number" value={config.debuffDuration} onChange={e=>setConfig({...config, debuffDuration: Number(e.target.value)})} className="bg-transparent w-full outline-none font-bold text-white text-right"/><span className="text-slate-500 text-xs ml-2 font-bold">СЕК</span></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Кастомные правила */}
+                                    <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-white text-lg"><i className="fa-solid fa-wand-magic-sparkles text-indigo-400 mr-2"></i>Кастомные триггеры</h3>
+                                            <button onClick={() => setConfig({...config, customGifts: [...config.customGifts, { id: Date.now().toString(), gift: null, type: 'add', value: 60, isEnabled: true }]})} className="bg-slate-800 px-3 py-1.5 rounded-lg text-sm font-bold text-white"><i className="fa-solid fa-plus"></i> Создать</button>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {config.customGifts.map(cg => (
+                                                <div key={cg.id} className="flex gap-3 items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
+                                                    <div onClick={() => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, isEnabled: !c.isEnabled}:c)}))} className={`w-10 h-5 rounded-full relative cursor-pointer ${cg.isEnabled ? 'bg-indigo-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${cg.isEnabled ? 'translate-x-5' : 'translate-x-1'}`}></div></div>
+                                                    <div className="flex items-center gap-2 flex-1 bg-slate-900 p-2 rounded-lg border border-slate-700 cursor-pointer" onClick={() => setModal({ isOpen: true, key: `custom_${cg.id}` })}>
+                                                        {cg.gift ? <><img src={cg.gift.icon} className="w-6 h-6"/> <span className="font-bold text-xs text-white">{cg.gift.name}</span></> : <span className="text-slate-500 text-xs font-bold px-2">Выбрать подарок...</span>}
+                                                    </div>
+                                                    <select value={cg.type} onChange={e => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, type: e.target.value}:c)}))} className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white outline-none font-bold">
+                                                        <option value="add">+ Добавить время</option><option value="sub">- Отнять время</option><option value="set">= Установить время</option><option value="reset">Обнулить (0)</option>
+                                                    </select>
+                                                    {cg.type !== 'reset' && <input type="number" value={cg.value} onChange={e => setConfig(p=>({...p, customGifts: p.customGifts.map(c=>c.id===cg.id?{...c, value: Number(e.target.value)}:c)}))} className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-center font-bold text-white outline-none" placeholder="Сек" />}
+                                                    <button onClick={() => setConfig(p=>({...p, customGifts: p.customGifts.filter(c=>c.id!==cg.id)}))} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:text-rose-500 bg-slate-900 rounded-lg transition"><i className="fa-solid fa-trash"></i></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {}
+                            {activeTab === 'roulette' && (
+                                <div className="space-y-6 animate-fade-in-up">
+                                    <h2 className="text-3xl font-black text-white mb-6">Рулетка</h2>
+                                    <div className="bg-slate-900 border border-indigo-500/30 p-6 rounded-2xl shadow-xl flex flex-col gap-4">
+                                        <div className="flex items-center justify-between">
+                                            <div><h3 className="font-bold text-white mb-1">Триггер рулетки</h3><p className="text-xs text-slate-400">Подарок, который запускает колесо</p></div>
+                                            <div className="flex items-center gap-3 bg-slate-950 px-4 py-2 rounded-xl border border-slate-700">
+                                                {config.giftRoulette ? <div className="flex items-center gap-2"><img src={config.giftRoulette.icon} className="w-6 h-6"/> <span className="font-bold text-sm text-white">{config.giftRoulette.name}</span></div> : <span className="text-slate-500 text-sm">Не выбран</span>}
+                                                <button onClick={() => setModal({ isOpen: true, key: 'giftRoulette' })} className="ml-2 bg-indigo-600 px-3 py-1 rounded text-xs font-bold text-white">Изменить</button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800 cursor-pointer" onClick={() => setConfig({...config, rouletteGiftAddsCost: !config.rouletteGiftAddsCost})}>
+                                            <div className={`w-10 h-5 rounded-full relative ${config.rouletteGiftAddsCost ? 'bg-indigo-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${config.rouletteGiftAddsCost ? 'translate-x-5' : 'translate-x-1'}`}></div></div>
+                                            <div><span className="text-sm font-bold text-white block">Учитывать стоимость подарка</span><span className="text-xs text-slate-500 block">Добавляет стоимость подарка (+сек) в таймер перед запуском рулетки</span></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+                                        <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-white">Слоты колеса</h3><button onClick={() => setConfig({...config, rouletteSlots: [...config.rouletteSlots, { id: Date.now().toString(), label: 'Новый слот', type: 'add_time', value: 60, chance: 10, color: '#6366f1', isEliminable: false, isEnabled: true }]})} className="bg-slate-800 px-3 py-1.5 rounded-lg text-sm font-bold text-white"><i className="fa-solid fa-plus"></i> Слот</button></div>
+                                        <div className="space-y-3">
+                                            {config.rouletteSlots.map(slot => (
+                                                <div key={slot.id} className={`flex gap-2 items-center bg-slate-950 p-3 rounded-xl border ${slot.isEnabled !== false ? 'border-slate-800' : 'border-slate-800/50 opacity-50'}`}>
+                                                    <div onClick={() => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, isEnabled: s.isEnabled === false ? true : false}:s)}))} className={`w-10 h-5 rounded-full relative cursor-pointer ${slot.isEnabled !== false ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${slot.isEnabled !== false ? 'translate-x-5' : 'translate-x-1'}`}></div></div>
+                                                    <input type="color" value={slot.color} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, color: e.target.value}:s)}))} className="w-8 h-8 rounded border-none bg-transparent cursor-pointer" />
+                                                    <input type="text" value={slot.label} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, label: e.target.value}:s)}))} className="flex-1 min-w-[120px] bg-transparent outline-none font-bold text-white border-b border-slate-700 focus:border-indigo-500 px-2" />
+                                                    <select value={slot.type} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, type: e.target.value}:s)}))} className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white outline-none font-bold">
+                                                        <option value="add_time">+ Время</option><option value="sub_time">- Время</option><option value="multiply_time">Умножить (*)</option><option value="divide_time">Разделить (/)</option><option value="set_time">= Время</option><option value="multiplier">Бафф x</option><option value="debuff">Дебафф x</option><option value="freeze">Заморозка</option><option value="unfreeze">Разморозка</option><option value="extra_spin">Еще прокрут</option><option value="reset_time">Обнулить</option><option value="special">Приз</option>
+                                                    </select>
+                                                    {['multiply_time','divide_time','multiplier','debuff'].includes(slot.type) && <input type="number" value={slot.multiplierValue||2} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, multiplierValue: Number(e.target.value)}:s)}))} className="w-12 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-center font-bold text-white outline-none" />}
+                                                    {['add_time','sub_time','set_time','multiplier','debuff','extra_spin'].includes(slot.type) && <input type="number" value={slot.value} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, value: Number(e.target.value)}:s)}))} className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-center font-bold text-white outline-none" />}
+                                                    <div className="flex items-center bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 w-20"><input type="number" value={slot.chance} onChange={e => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, chance: Number(e.target.value)}:s)}))} className="bg-transparent w-full outline-none text-xs text-right font-bold text-white"/> <span className="text-xs text-slate-500 ml-1 font-bold">%</span></div>
+                                                    <button onClick={() => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.map(s=>s.id===slot.id?{...s, isEliminable: !s.isEliminable}:s)}))} className={`px-2 py-1.5 rounded-lg text-xs font-bold border ${slot.isEliminable ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/50' : 'bg-slate-900 text-slate-500 border-slate-700'}`}>{slot.isEliminable ? '1 РАЗ' : 'МНОГОР.'}</button>
+                                                    <button onClick={() => setConfig(p=>({...p, rouletteSlots: p.rouletteSlots.filter(s=>s.id!==slot.id)}))} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:text-rose-500 bg-slate-900 rounded-full"><i className="fa-solid fa-xmark"></i></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {}
                             {activeTab === 'style' && (
                                 <div className="space-y-6 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Оформление виджетов</h2>
@@ -328,12 +547,12 @@
                                 </div>
                             )}
 
-                            {/* ССЫЛКИ ДЛЯ OBS */}
+                            {}
                             {activeTab === 'obs' && (
                                 <div className="space-y-6 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Ссылки для OBS</h2>
                                     <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-6">
-                                        <p className="text-slate-400 text-sm">Эти ссылки уникальны для вашего аккаунта (UID: {user.id}). Добавьте их как "Браузер" в OBS.</p>
+                                        <p className="text-slate-400 text-sm">Эти ссылки уникальны для вашего аккаунта (UID: <span className="font-mono text-indigo-400">{user.id}</span>). Добавьте их как "Браузер" в OBS.</p>
                                         
                                         <div>
                                             <span className="font-bold text-white mb-2 block"><i className="fa-solid fa-clock text-indigo-400 mr-2"></i>Таймер</span>
@@ -353,8 +572,6 @@
                                     </div>
                                 </div>
                             )}
-
-                            {/* Остальные вкладки (Таймер, Триггеры, Рулетка) остаются аналогичными предыдущим, но для краткости я их пропустил. Код для них полностью совпадает со старой версией. Достаточно включить их в полную сборку. */}
                         </div>
                     </div>
 

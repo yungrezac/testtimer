@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Comic+Neue:wght@700&family=Roboto:wght@700;900&family=Open+Sans:wght@700;800&family=Oswald:wght@700&family=Raleway:wght@800;900&family=Nunito:wght@800;900&family=Playfair+Display:wght@700;900&family=Caveat:wght@700&family=Rubik:wght@700;900&family=Pacifico&family=Yanone+Kaffeesatz:wght@700&family=Comfortaa:wght@700&family=Ruslan+Display&family=Kelly+Slab&family=Roboto+Slab:wght@700;900&family=Lobster&family=Alice&family=PT+Sans:wght@700&display=swap" rel="stylesheet">
     
     <style>
         body { background-color: transparent !important; color: #f8fafc; font-family: 'Inter', sans-serif; overflow: hidden; margin:0; padding:0;}
@@ -23,7 +24,6 @@
         .animate-fade-in-up { animation: fadeInUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
         @keyframes idleEventPop { 0% { opacity: 0; transform: translateY(50px) scale(0.8); } 10%, 90% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(20px) scale(0.9); } }
         .idle-event-overlay { animation: idleEventPop 4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-        /* GPU Accelerated Class для плавности рулетки */
         .gpu-accelerated { will-change: transform; transform: translateZ(0); backface-visibility: hidden; }
     </style>
 </head>
@@ -43,7 +43,7 @@
                 const gainNode = audioCtx.createGain();
                 osc.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
-                osc.type = 'sine'; // Чистый короткий звук
+                osc.type = 'sine';
                 osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
                 gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime); 
@@ -75,7 +75,6 @@
             useEffect(() => { configRef.current = state.config; }, [state.config]);
 
             useEffect(() => {
-                // Подключение к комнате по UID
                 const urlParams = new URLSearchParams(window.location.search);
                 const uid = urlParams.get('uid');
                 if (uid) socket.emit('join-room', uid);
@@ -91,16 +90,15 @@
                     setTimeout(() => setIdleAlert(p => p?.renderId === data.renderId ? null : p), 4000);
                 });
 
-                // Функция анимации звука
                 const startAnimationLoop = (targetOffset, duration) => {
                     let startTime = performance.now();
                     let lastTickIndex = 0;
-                    const itemW = 192 + 16; // width + gap
+                    const itemW = 192 + 16;
                     
                     const animateSound = (now) => {
                         const elapsed = now - startTime;
                         const progress = Math.min(elapsed / duration, 1);
-                        const easeOut = 1 - Math.pow(1 - progress, 4); // Плавное замедление (Quart)
+                        const easeOut = 1 - Math.pow(1 - progress, 4);
                         const currentDist = easeOut * Math.abs(targetOffset);
                         const currentIndex = Math.floor(currentDist / itemW);
                         
@@ -157,7 +155,11 @@
                 return () => { socket.removeAllListeners(); cancelAnimationFrame(animateRef.current); };
             }, []);
 
-            const fontFamily = state.config?.styles?.fontFamily || 'Inter'; const enableStroke = state.config?.styles?.enableStroke !== false;
+            const fontFamily = state.config?.styles?.fontFamily || 'Inter'; 
+            const enableStroke = state.config?.styles?.enableStroke !== false;
+            
+            const likeColor = state.config?.styles?.likeAlertColor || '#f43f5e';
+            const followColor = state.config?.styles?.followAlertColor || '#34d399';
 
             return (
                 <div className="h-screen w-screen flex flex-col relative overflow-hidden bg-transparent" style={{ fontFamily }}>
@@ -176,13 +178,22 @@
                                 <div className="flex items-center justify-center gap-6 mt-2 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
                                     <img src={idleAlert.avatar || 'https://via.placeholder.com/64'} className="w-24 h-24 rounded-full border-[6px] border-white shadow-[0_0_30px_#fff] object-cover bg-slate-900" />
                                     <i className="fa-solid fa-xmark text-white text-5xl opacity-80" style={{ textShadow: getStroke(false, enableStroke) }}></i>
-                                    {idleAlert.originalType === 'like' || idleAlert.type === 'like' ? <i className="fa-solid fa-heart text-7xl text-rose-500 drop-shadow-[0_0_20px_rgba(244,63,94,0.8)]"></i> : 
-                                     idleAlert.originalType === 'follow' || idleAlert.type === 'follow' ? <i className="fa-solid fa-user-plus text-7xl text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.8)]"></i> : 
+                                    {idleAlert.type === 'like' ? <i className="fa-solid fa-heart text-7xl drop-shadow-[0_0_20px_rgba(244,63,94,0.8)]" style={{ color: likeColor }}></i> : 
+                                     idleAlert.type === 'follow' ? <i className="fa-solid fa-user-plus text-7xl drop-shadow-[0_0_20px_rgba(52,211,153,0.8)]" style={{ color: followColor }}></i> : 
                                      idleAlert.giftIcon ? <img src={idleAlert.giftIcon} className="w-24 h-24 drop-shadow-[0_0_20px_#fff] object-contain" /> : <i className="fa-solid fa-bolt text-7xl text-indigo-400 drop-shadow-[0_0_20px_rgba(99,102,241,0.8)]"></i>}
                                 </div>
                                 <div className="mt-4">
-                                    <span className="font-black text-7xl uppercase tracking-widest text-emerald-400" style={{ textShadow: getStroke(true, enableStroke, `0 10px 40px rgba(0,0,0,0.8), 0 0 50px currentColor`) }}>
-                                        {idleAlert.type === 'freeze' ? '❄ ЗАМОРОЗКА' : idleAlert.type === 'unfreeze' ? '🔥 РАЗМОРОЗКА' : idleAlert.type === 'frozen_gift' ? '❄ ЗАМОРОЖЕН' : idleAlert.type === 'multiplier' ? '⚡ПРИБАВЛЕНИЕ' : idleAlert.type === 'debuff' ? '☠ УБАВЛЕНИЕ' : idleAlert.type === 'reset_time' || idleAlert.type === 'reset' ? 'ОБНУЛЕНИЕ!' : idleAlert.type === 'set_time' || idleAlert.type === 'set' ? `ОСТАЛОСЬ ${Math.floor(idleAlert.targetTime/60)}:${(idleAlert.targetTime%60).toString().padStart(2,'0')}` : idleAlert.timeAdded > 0 ? `+${idleAlert.timeAdded} СЕК` : idleAlert.timeAdded < 0 ? `${idleAlert.timeAdded} СЕК` : idleAlert.giftName || 'ТРИГГЕР'}
+                                    <span className="font-black text-7xl uppercase tracking-widest text-emerald-400" style={{ textShadow: getStroke(true, enableStroke, `0 10px 40px rgba(0,0,0,0.8), 0 0 50px currentColor`), color: idleAlert.type === 'like' ? likeColor : idleAlert.type === 'follow' ? followColor : '#34d399' }}>
+                                        {idleAlert.type === 'freeze' ? '❄ ЗАМОРОЗКА' : 
+                                         idleAlert.type === 'unfreeze' ? '🔥 РАЗМОРОЗКА' : 
+                                         idleAlert.type === 'frozen_gift' ? '❄ ЗАМОРОЖЕН' : 
+                                         idleAlert.type === 'multiplier' ? '⚡ПРИБАВЛЕНИЕ' : 
+                                         idleAlert.type === 'debuff' ? '☠ УБАВЛЕНИЕ' : 
+                                         idleAlert.type === 'reset_time' || idleAlert.type === 'reset' ? 'ОБНУЛЕНИЕ!' : 
+                                         idleAlert.type === 'set_time' || idleAlert.type === 'set' ? `ОСТАЛОСЬ ${Math.floor(idleAlert.targetTime/60)}:${(idleAlert.targetTime%60).toString().padStart(2,'0')}` : 
+                                         idleAlert.timeAdded > 0 ? `+${idleAlert.timeAdded} СЕК` : 
+                                         idleAlert.timeAdded < 0 ? `${idleAlert.timeAdded} СЕК` : 
+                                         idleAlert.giftName || 'ТРИГГЕР'}
                                     </span>
                                 </div>
                             </div>

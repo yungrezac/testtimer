@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
@@ -171,7 +172,7 @@
         function AuthScreen({ onLogin }) {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
-            const [confirmPassword, setConfirmPassword] = useState(''); // Новое поле для подтверждения
+            const [confirmPassword, setConfirmPassword] = useState('');
             const [isLogin, setIsLogin] = useState(true);
             const [error, setError] = useState('');
 
@@ -183,18 +184,13 @@
                     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                     if (error) setError(error.message); else onLogin(data.user);
                 } else {
-                    // Проверка совпадения паролей
                     if (password !== confirmPassword) {
                         setError('Пароли не совпадают!');
                         return;
                     }
-                    
                     const { data, error } = await supabase.auth.signUp({ email, password });
-                    
-                    if (error) {
-                        setError(error.message);
-                    } else {
-                        // Автоматический вход сразу после успешной регистрации
+                    if (error) setError(error.message); 
+                    else {
                         const loginResult = await supabase.auth.signInWithPassword({ email, password });
                         if (loginResult.error) {
                             setError('Регистрация успешна, но для входа требуется подтверждение почты.');
@@ -234,72 +230,64 @@
             const [amount, setAmount] = useState(null);
             const [wallet, setWallet] = useState('');
             const [checking, setChecking] = useState(false);
+            const [creating, setCreating] = useState(false);
             const [error, setError] = useState('');
+            const qrRef = useRef(null);
 
             useEffect(() => {
-                socket.on('payment-created', (data) => { setAmount(data.amount); setWallet(data.wallet); });
+                socket.on('payment-created', (data) => { 
+                    setCreating(false); setAmount(data.amount); setWallet(data.wallet);
+                    setTimeout(() => {
+                        if (qrRef.current) {
+                            qrRef.current.innerHTML = '';
+                            new QRCode(qrRef.current, {
+                                text: `ton://transfer/${data.wallet}?amount=${data.amount * 1000000000}&text=AstralGame`,
+                                width: 200, height: 200, colorDark : "#0f172a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H
+                            });
+                        }
+                    }, 100);
+                });
                 socket.on('payment-success', (data) => { setChecking(false); onVerified(data.expireDate); });
-                socket.on('payment-not-found', () => { setChecking(false); setError('Платеж пока не найден. Подождите пару минут и попробуйте снова.'); });
-                socket.on('payment-error', () => { setChecking(false); setError('Ошибка при проверке. Повторите попытку позже.'); });
-                
+                socket.on('payment-not-found', () => { setChecking(false); setError('Платеж не найден. Убедитесь, что перевели точную сумму.'); });
+                socket.on('payment-error', (data) => { setChecking(false); setCreating(false); setError(data.message); });
                 return () => { socket.off('payment-created'); socket.off('payment-success'); socket.off('payment-not-found'); socket.off('payment-error'); };
-            }, []);
-
-            const handleBuy = () => { socket.emit('create-payment', user.id); setError(''); };
-            const handleCheck = () => { setChecking(true); setError(''); socket.emit('verify-payment', { uid: user.id, amount }); };
+            }, [onVerified]);
 
             return (
-                <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white relative z-50 p-6" style={{ fontFamily: 'Inter' }}>
-                    <div className="absolute top-6 right-6">
-                        <button onClick={onLogout} className="text-rose-500 hover:text-rose-400 font-bold">Выйти</button>
-                    </div>
-                    
-                    <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl w-full max-w-xl flex flex-col items-center text-center">
-                        <i className="fa-solid fa-lock text-6xl text-indigo-500 mb-6 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]"></i>
-                        <h1 className="text-3xl font-black text-white mb-2">Доступ ограничен</h1>
-                        <p className="text-slate-400 mb-8">Для использования Astral Game необходима активная подписка. Стоимость: <span className="font-bold text-emerald-400">50 USDT</span> / 30 дней.</p>
-
+                <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white p-6" style={{ fontFamily: 'Inter' }}>
+                    <div className="bg-slate-900 border border-slate-800 shadow-2xl p-8 rounded-3xl w-full max-w-md flex flex-col items-center text-center">
+                        <div className="w-16 h-16 bg-indigo-500/10 flex items-center justify-center rounded-2xl mb-4 border border-indigo-500/20"><i className="fa-solid fa-lock text-3xl text-indigo-400"></i></div>
+                        <h1 className="text-3xl font-black mb-2">ASTRAL GAME PRO</h1>
+                        <p className="text-slate-400 mb-8 text-sm">Для доступа к системе требуется активная подписка. Доступ выдается на 30 дней.</p>
+                        
                         {!amount ? (
-                            <button onClick={handleBuy} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(99,102,241,0.4)] transition">
-                                Приобрести доступ
+                            <button onClick={() => { setCreating(true); setError(''); socket.emit('create-payment', user.id); }} disabled={creating} className="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-xl font-bold transition flex items-center justify-center gap-2">
+                                {creating ? <><i className="fa-solid fa-circle-notch fa-spin"></i> Подготовка...</> : <><i className="fa-brands fa-telegram"></i> Оплатить 50 USDT (TON)</>}
                             </button>
                         ) : (
-                            <div className="w-full bg-slate-950 border border-indigo-500/30 p-6 rounded-2xl animate-fade-in-up">
-                                <h3 className="text-lg font-bold text-indigo-300 mb-4">Ожидание оплаты</h3>
-                                
-                                <div className="space-y-4 text-left">
-                                    <div>
-                                        <label className="text-xs text-slate-500 font-bold uppercase">Сумма к отправке (строго точно!)</label>
-                                        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex justify-between items-center mt-1">
-                                            <span className="font-mono text-2xl text-emerald-400 font-black">{amount} USDT</span>
-                                            <button onClick={() => navigator.clipboard.writeText(amount)} className="text-slate-400 hover:text-white"><i className="fa-solid fa-copy"></i></button>
-                                        </div>
-                                        <p className="text-xs text-rose-400 mt-1">*Отправьте именно эту сумму с копейками для автоматического зачисления.</p>
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="text-xs text-slate-500 font-bold uppercase">Сеть: TON (The Open Network)</label>
-                                        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex justify-between items-center mt-1 gap-2">
-                                            <span className="font-mono text-sm text-slate-300 break-all">{wallet}</span>
-                                            <button onClick={() => navigator.clipboard.writeText(wallet)} className="text-slate-400 hover:text-white"><i className="fa-solid fa-copy"></i></button>
-                                        </div>
-                                    </div>
+                            <div className="w-full flex flex-col items-center animate-fade-in-up">
+                                <div className="bg-white p-4 rounded-2xl mb-4" ref={qrRef}></div>
+                                <div className="bg-slate-950 border border-slate-800 w-full p-4 rounded-xl mb-4 flex flex-col gap-1">
+                                    <span className="text-slate-400 text-xs font-bold uppercase">Сумма к оплате:</span>
+                                    <span className="text-emerald-400 font-mono text-3xl">{amount} USDT</span>
+                                    <span className="text-rose-400 text-[10px] mt-1">*Переведите ТОЧНО эту сумму (включая копейки), иначе платеж потеряется!</span>
                                 </div>
-
-                                {error && <div className="mt-4 bg-rose-500/20 text-rose-400 border border-rose-500/50 p-3 rounded-lg text-sm">{error}</div>}
-
-                                <button onClick={handleCheck} disabled={checking} className={`mt-6 w-full py-4 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2 ${checking ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)]'}`}>
-                                    {checking ? <><i className="fa-solid fa-circle-notch fa-spin"></i> Проверяем блокчейн...</> : 'Я оплатил, проверить'}
+                                <a href={`ton://transfer/${wallet}?amount=${amount * 1000000000}&text=AstralGame`} className="w-full bg-[#3390ec] hover:bg-[#2a7bcf] text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 mb-3">
+                                    <i className="fa-solid fa-wallet"></i> Открыть Tonkeeper
+                                </a>
+                                <button onClick={() => { setChecking(true); setError(''); socket.emit('verify-payment', { uid: user.id, amount }); }} disabled={checking} className="w-full bg-slate-800 hover:bg-slate-700 text-emerald-400 py-3 rounded-xl font-bold transition border border-slate-700">
+                                    {checking ? 'Проверка в блокчейне...' : 'Проверить оплату'}
                                 </button>
                             </div>
                         )}
+                        {error && <div className="mt-4 p-3 bg-rose-500/10 border border-rose-500/50 rounded-xl text-rose-400 text-sm font-bold w-full">{error}</div>}
+                        <button onClick={onLogout} className="text-slate-500 hover:text-white mt-6 text-xs transition">Выйти из аккаунта</button>
                     </div>
                 </div>
             );
         }
 
         function MainApp({ user, onLogout }) {
-            const [subActive, setSubActive] = useState(null); // null = загрузка
             const [activeTab, setActiveTab] = useState('connect');
             const [status, setStatus] = useState({ tt: { text: 'Ожидание', isActive: false, isStreamLive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' });
             const [isRunning, setIsRunning] = useState(false);
@@ -331,14 +319,7 @@
 
             useEffect(() => {
                 socket.emit('join-room', user.id);
-                supabase.from('ttimer_settings').select('config, subscription_until').eq('user_id', user.id).single().then(({ data, error }) => {
-                    // Проверка подписки
-                    if (data && data.subscription_until) {
-                        setSubActive(new Date(data.subscription_until) > new Date());
-                    } else {
-                        setSubActive(false); // Если записи нет или даты нет
-                    }
-
+                supabase.from('ttimer_settings').select('config').eq('user_id', user.id).single().then(({ data, error }) => {
                     if (data && data.config) {
                         const merged = { ...defConfig, ...data.config, styles: { ...defConfig.styles, ...(data.config.styles || {}) } };
                         setConfig(merged); setSavedConfig(merged);
@@ -364,19 +345,9 @@
 
             const appFontFamily = config.styles?.fontFamily || 'Inter';
 
-            // Если загрузка статуса подписки еще идет
-            if (subActive === null) return <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-indigo-500 text-4xl"><i className="fa-solid fa-circle-notch fa-spin"></i></div>;
-            
-            // Если подписка неактивна, показываем экран оплаты
-            if (!subActive) return <SubscriptionScreen user={user} onLogout={onLogout} onVerified={(expireDate) => {
-                setSubActive(true);
-                // Если у пользователя не было конфига, сохраняем дефолтный чтобы создать строку в БД
-                supabase.from('ttimer_settings').upsert({ user_id: user.id, config: defConfig, subscription_until: expireDate }).then(()=>{});
-            }} />;
-
             return (
                 <div className="flex h-screen bg-slate-950 text-slate-200" style={{ fontFamily: appFontFamily }}>
-                    {}
+                    
                     <div className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shrink-0 shadow-2xl relative">
                         <div className="p-6 border-b border-slate-800 flex flex-col gap-2 relative">
                             <div className="flex items-center gap-3">
@@ -415,17 +386,17 @@
                         </div>
                     </div>
 
-                    {}
                     <div className="flex-1 overflow-y-auto p-8 relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950 pb-32">
                         <div className="max-w-[1200px] mx-auto space-y-6">
                             
+                            {}
                             {activeTab === 'connect' && (
                                 <div className="space-y-4 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Подключения</h2>
                                     
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-cyan-500/30 transition">
                                         <div className="w-12 h-12 bg-cyan-500/10 flex items-center justify-center rounded-full border border-cyan-500/20 shrink-0"><i className="fa-brands fa-tiktok text-cyan-400 text-2xl"></i></div>
-                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isActive ? 'text-emerald-400' : 'text-slate-500'}`}>{status.tt.text}</span></div>
+                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isActive ? 'text-emerald-400' : 'text-rose-400'}`}>{status.tt.text}</span></div>
                                         <div className="flex-1 flex gap-2" style={{ fontFamily: 'Inter' }}>
                                             {!status.tt.isActive && <><input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /><input type="text" value={config.ttApiKey} onChange={e=>setConfig({...config, ttApiKey: e.target.value})} placeholder="API Key (tik.tools)" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /></>}
                                         </div>
@@ -455,6 +426,7 @@
                                 </div>
                             )}
 
+                            {}
                             {activeTab === 'timer' && (
                                 <div className="space-y-6 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Лайки, Время, Подписки</h2>
@@ -531,7 +503,6 @@
                                         </div>
                                     </div>
                                     
-                                    {/* Кастомные правила */}
                                     <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
                                         <div className="flex justify-between items-center mb-4">
                                             <h3 className="font-bold text-white text-lg"><i className="fa-solid fa-wand-magic-sparkles text-indigo-400 mr-2"></i>Кастомные триггеры</h3>
@@ -724,16 +695,42 @@
         }
 
         function App() {
-            const [user, setUser] = useState(null); const [loading, setLoading] = useState(true);
+            const [user, setUser] = useState(null); 
+            const [loading, setLoading] = useState(true);
+            const [subUntil, setSubUntil] = useState(null);
+
+            const checkSub = async (uid) => {
+                const { data } = await supabase.from('ttimer_settings').select('subscription_until').eq('user_id', uid).single();
+                if (data) setSubUntil(data.subscription_until);
+                else setSubUntil(null);
+                setLoading(false);
+            };
+
             useEffect(() => {
-                supabase.auth.getSession().then(({ data: { session } }) => { setUser(session?.user ?? null); setLoading(false); });
-                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setUser(session?.user ?? null); });
+                supabase.auth.getSession().then(({ data: { session } }) => { 
+                    const u = session?.user ?? null;
+                    setUser(u);
+                    if (u) checkSub(u.id); else setLoading(false);
+                });
+                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { 
+                    const u = session?.user ?? null;
+                    setUser(u);
+                    if (u) checkSub(u.id); else { setSubUntil(null); setLoading(false); }
+                });
                 return () => subscription.unsubscribe();
             }, []);
-            if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-indigo-500 text-4xl"><i className="fa-solid fa-circle-notch fa-spin"></i></div>;
-            return user ? <MainApp user={user} onLogout={() => supabase.auth.signOut()} /> : <AuthScreen onLogin={setUser} />;
+
+            const isSubbed = subUntil && new Date(subUntil) > new Date();
+
+            if (loading) return <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-indigo-500 text-4xl"><i className="fa-solid fa-circle-notch fa-spin mb-4"></i><span className="text-sm font-bold">Загрузка...</span></div>;
+            if (!user) return <AuthScreen onLogin={(u) => { setLoading(true); checkSub(u.id); }} />;
+            if (!isSubbed) return <SubscriptionScreen user={user} onLogout={() => supabase.auth.signOut()} onVerified={(date) => setSubUntil(date)} />;
+            
+            return <MainApp user={user} onLogout={() => supabase.auth.signOut()} />;
         }
-        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<App />);
+        
+        const root = ReactDOM.createRoot(document.getElementById('root')); 
+        root.render(<App />);
     </script>
 </body>
 </html>

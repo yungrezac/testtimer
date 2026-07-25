@@ -624,7 +624,6 @@ io.on('connection', (socket) => {
             if (res.ok) {
                 socket.emit('payment-created', { amount, wallet: TON_WALLET });
             } else {
-                const errData = await res.text();
                 socket.emit('payment-error', { message: `Ошибка БД: убедитесь, что таблица создана.` });
             }
         } catch (e) { socket.emit('payment-error', { message: `Ошибка сервера: ${e.message}` }); }
@@ -632,7 +631,10 @@ io.on('connection', (socket) => {
 
     socket.on('verify-payment', async ({ uid, amount }) => {
         try {
-            // Проверка через публичный TonAPI (упрощенная)
+            // Переводим ожидаемую сумму в нано-единицы (1 TON/USDT = 1 000 000 000 nano)
+            const expectedNano = Math.floor(amount * 1000000000);
+            
+            // Запрашиваем последние 15 транзакций кошелька
             const tonRes = await fetch(`https://tonapi.io/v2/blockchain/accounts/${TON_WALLET}/transactions?limit=15`);
             const data = await tonRes.json();
             
@@ -640,27 +642,44 @@ io.on('connection', (socket) => {
 
             let found = false;
             for (let tx of data.transactions) {
-                if (tx.out_msgs.length > 0) continue; // Исходящие пропускаем
-                // Для MVP мы просто смотрим факт наличия свежей транзакции.
-                // В реальном USDT нужно парсить in_msg -> decoded_body (Jetton transfer)
-                // Но так как это MVP, допустим, мы нашли нужную сумму.
-                // (В реальном проекте используйте TonAPI Jetton History)
-                found = true; 
-                break; 
+                // Если нет входящего сообщения или сумма равна 0 - пропускаем
+                if (!tx.in_msg || !tx.in_msg.value || tx.in_msg.value === '0') continue;
+                
+                // Получаем сумму транзакции
+                const txValue = parseInt(tx.in_msg.value, 10);
+                
+                // СТРОГАЯ ПРОВЕРКА: Сумма должна совпадать копейка в копейку
+                if (txValue === expectedNano) {
+                    found = true; 
+                    break; 
+                }
             }
 
             if (found) {
+                // Выдаем подписку
                 const expireDate = new Date(); expireDate.setDate(expireDate.getDate() + 30);
+                
                 await fetch(`${SUPABASE_URL}/rest/v1/ttimer_settings?user_id=eq.${uid}`, {
                     method: 'PATCH',
                     headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ subscription_until: expireDate.toISOString() })
                 });
+
+                // Обновляем статус платежа в базе, чтобы его не использовали дважды
+                await fetch(`${SUPABASE_URL}/rest/v1/crypto_payments?user_id=eq.${uid}&expected_amount=eq.${amount}`, {
+                    method: 'PATCH',
+                    headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'success' })
+                });
+
                 socket.emit('payment-success', { expireDate: expireDate.toISOString() });
             } else {
                 socket.emit('payment-not-found');
             }
-        } catch (e) { socket.emit('payment-error', { message: 'Блокчейн временно недоступен или ошибка запроса.' }); }
+        } catch (e) { 
+            console.error(e);
+            socket.emit('payment-error', { message: 'Блокчейн временно недоступен или ошибка запроса.' }); 
+        }
     });
 });
 

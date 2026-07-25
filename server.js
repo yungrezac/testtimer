@@ -11,7 +11,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 // --- НАСТРОЙКИ БАЗЫ И ОПЛАТЫ ---
 const SUPABASE_URL = 'https://lqjagftaeejdufwwvjwd.supabase.co';
 // ВАЖНО: ЗАМЕНИТЕ НА ВАШ ИСТИННЫЙ SERVICE_ROLE KEY (из настроек Supabase -> API -> service_role secret)
-const SUPABASE_SERVICE_KEY = 'ВАШ_SERVICE_ROLE_KEY_ИЗ_SUPABASE'; 
+const SUPABASE_SERVICE_KEY = 'sb_secret_ABawG1Kn1TBgeDM6JBB0KQ_bJvj_77m'; 
 const TON_WALLET = 'UQDCBh7hF8vHZOh5kd81c8eKKj5bF1ymVTW09kdYd66-0q7T';
 
 app.use(express.static(path.join(__dirname, '/')));

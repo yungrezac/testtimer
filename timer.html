@@ -60,7 +60,6 @@
                 socket.on('new-alert', data => {
                     const id = Date.now() + Math.random();
                     let text = data.isSpecial ? data.giftName : null;
-                    if (data.type === 'like' || data.type === 'follow') text = data.giftName || null;
                     setAlerts(prev => [...prev, { id, amount: data.timeAdded, text: text, type: data.type }]);
                     setTimeout(() => setAlerts(prev => prev.filter(n => n.id !== id)), 2500);
                 });
@@ -79,8 +78,8 @@
             const getAlertColor = (type, amount) => {
                 if (type === 'like') return (styles.likeAlertColor || '#f43f5e');
                 if (type === 'follow') return (styles.followAlertColor || '#34d399');
-                if (amount < 0) return (styles.floatMinusColor || '#ef4444'); // Красный для минуса
-                if (amount > 0) return (styles.floatPlusColor || '#22c55e'); // Зеленый для плюса
+                if (amount < 0) return (styles.floatMinusColor || '#ef4444'); 
+                if (amount > 0) return (styles.floatPlusColor || '#22c55e'); 
                 return '#fbbf24';
             };
 

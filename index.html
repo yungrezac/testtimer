@@ -169,17 +169,43 @@
         }
 
         function AuthScreen({ onLogin }) {
-            const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [isLogin, setIsLogin] = useState(true); const [error, setError] = useState('');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [confirmPassword, setConfirmPassword] = useState(''); // Новое поле для подтверждения
+            const [isLogin, setIsLogin] = useState(true);
+            const [error, setError] = useState('');
+
             const handleSubmit = async (e) => {
-                e.preventDefault(); setError('');
+                e.preventDefault(); 
+                setError('');
+                
                 if (isLogin) {
                     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                     if (error) setError(error.message); else onLogin(data.user);
                 } else {
+                    // Проверка совпадения паролей
+                    if (password !== confirmPassword) {
+                        setError('Пароли не совпадают!');
+                        return;
+                    }
+                    
                     const { data, error } = await supabase.auth.signUp({ email, password });
-                    if (error) setError(error.message); else { setError('Регистрация успешна! Войдите.'); setIsLogin(true); }
+                    
+                    if (error) {
+                        setError(error.message);
+                    } else {
+                        // Автоматический вход сразу после успешной регистрации
+                        const loginResult = await supabase.auth.signInWithPassword({ email, password });
+                        if (loginResult.error) {
+                            setError('Регистрация успешна, но для входа требуется подтверждение почты.');
+                            setIsLogin(true);
+                        } else {
+                            onLogin(loginResult.data.user);
+                        }
+                    }
                 }
             };
+
             return (
                 <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-white" style={{ fontFamily: 'Inter' }}>
                     <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl w-full max-w-md">
@@ -189,9 +215,16 @@
                             {error && <div className="bg-rose-500/20 border border-rose-500 text-rose-400 p-3 rounded-xl text-sm text-center">{error}</div>}
                             <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-3 outline-none focus:border-indigo-500" required />
                             <input type="password" placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} className="bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-3 outline-none focus:border-indigo-500" required />
+                            
+                            {!isLogin && (
+                                <input type="password" placeholder="Подтвердите пароль" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-3 outline-none focus:border-indigo-500" required />
+                            )}
+
                             <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 font-bold py-3 rounded-xl mt-2 transition">{isLogin ? 'Войти' : 'Зарегистрироваться'}</button>
                         </form>
-                        <p className="text-center text-slate-400 mt-4 text-sm cursor-pointer hover:text-white" onClick={() => setIsLogin(!isLogin)}>{isLogin ? 'Создать аккаунт' : 'Уже есть аккаунт? Войти'}</p>
+                        <p className="text-center text-slate-400 mt-4 text-sm cursor-pointer hover:text-white" onClick={() => { setIsLogin(!isLogin); setError(''); setConfirmPassword(''); }}>
+                            {isLogin ? 'Создать аккаунт' : 'Уже есть аккаунт? Войти'}
+                        </p>
                     </div>
                 </div>
             );

@@ -656,23 +656,39 @@ io.on('connection', (socket) => {
             }
 
             if (found) {
-                // Выдаем подписку
-                const expireDate = new Date(); expireDate.setDate(expireDate.getDate() + 30);
+                // 1. Получаем текущую дату окончания подписки пользователя
+                const userRes = await fetch(`${SUPABASE_URL}/rest/v1/ttimer_settings?user_id=eq.${uid}&select=subscription_until`, {
+                    headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` }
+                });
+                const userData = await userRes.json();
                 
+                let currentExpire = new Date();
+                // Если подписка уже есть и она еще не закончилась, отсчитываем от нее
+                if (userData && userData.length > 0 && userData[0].subscription_until) {
+                    const dbDate = new Date(userData[0].subscription_until);
+                    if (dbDate > currentExpire) {
+                        currentExpire = dbDate;
+                    }
+                }
+                
+                // 2. Добавляем ровно 30 дней
+                currentExpire.setDate(currentExpire.getDate() + 30);
+                
+                // 3. Сохраняем новую дату в базу
                 await fetch(`${SUPABASE_URL}/rest/v1/ttimer_settings?user_id=eq.${uid}`, {
                     method: 'PATCH',
                     headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ subscription_until: expireDate.toISOString() })
+                    body: JSON.stringify({ subscription_until: currentExpire.toISOString() })
                 });
 
-                // Обновляем статус платежа в базе, чтобы его не использовали дважды
+                // 4. Помечаем платеж как использованный
                 await fetch(`${SUPABASE_URL}/rest/v1/crypto_payments?user_id=eq.${uid}&expected_amount=eq.${amount}`, {
                     method: 'PATCH',
                     headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: 'success' })
                 });
 
-                socket.emit('payment-success', { expireDate: expireDate.toISOString() });
+                socket.emit('payment-success', { expireDate: currentExpire.toISOString() });
             } else {
                 socket.emit('payment-not-found');
             }

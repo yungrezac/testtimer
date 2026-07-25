@@ -8,6 +8,10 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
+const TON_WALLET = 'UQDCBh7hF8vHZOh5kd81c8eKKj5bF1ymVTW09kdYd66-0q7T';
+const SUPABASE_URL = 'https://lqjagftaeejdufwwvjwd.supabase.co';
+const SUPABASE_SERVICE_KEY = 'ВАШ_SERVICE_ROLE_KEY_ИЗ_SUPABASE'; // СЕКРЕТНЫЙ КЛЮЧ! Взять в Settings -> API -> service_role
+
 app.use(express.static(path.join(__dirname, '/')));
 
 app.get('/da-callback', (req, res) => {
@@ -524,6 +528,77 @@ function getSession(userId) {
 
 io.on('connection', (socket) => {
     let userId = null;
+
+    // --- ЛОГИКА ПОДПИСКИ И ОПЛАТЫ ---
+    socket.on('create-payment', async (uid) => {
+        try {
+            // Генерируем сумму от 50.001 до 50.999
+            const randomCents = Math.floor(Math.random() * 999) + 1;
+            const amount = parseFloat((50 + (randomCents / 1000)).toFixed(3));
+            
+            // Сохраняем ожидаемый платеж в базу
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/crypto_payments`, {
+                method: 'POST',
+                headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: uid, expected_amount: amount, status: 'pending' })
+            });
+            
+            if (res.ok) socket.emit('payment-created', { amount, wallet: TON_WALLET });
+        } catch (e) { console.error(e); }
+    });
+
+    socket.on('verify-payment', async ({ uid, amount }) => {
+        try {
+            // 1. Ищем транзакции по кошельку в TON
+            const tonRes = await fetch(`https://tonapi.io/v2/accounts/${TON_WALLET}/events?limit=20`);
+            const data = await tonRes.json();
+            
+            let paymentFound = false;
+            const expectedAmountUnits = Math.round(amount * 1000000); // USDT в TON имеет 6 нулей
+
+            if (data.events) {
+                for (let event of data.events) {
+                    for (let action of event.actions) {
+                        // Проверяем, что это перевод Jetton (USDT) на наш кошелек
+                        if (action.type === 'JettonTransfer' && action.JettonTransfer.jetton.symbol === 'USDT') {
+                            const recipient = action.JettonTransfer.recipient?.address;
+                            // Сверяем сумму
+                            if (parseInt(action.JettonTransfer.amount) === expectedAmountUnits) {
+                                paymentFound = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (paymentFound) break;
+                }
+            }
+
+            if (paymentFound) {
+                // 2. Обновляем статус платежа
+                await fetch(`${SUPABASE_URL}/rest/v1/crypto_payments?expected_amount=eq.${amount}&status=eq.pending`, {
+                    method: 'PATCH',
+                    headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'completed' })
+                });
+
+                // 3. Выдаем подписку на 30 дней (Upsert)
+                const expireDate = new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)).toISOString();
+                await fetch(`${SUPABASE_URL}/rest/v1/ttimer_settings`, {
+                    method: 'POST',
+                    headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+                    body: JSON.stringify({ user_id: uid, subscription_until: expireDate })
+                });
+
+                socket.emit('payment-success', { expireDate });
+            } else {
+                socket.emit('payment-not-found');
+            }
+        } catch (e) {
+            console.error(e);
+            socket.emit('payment-error');
+        }
+    });
+    // --- КОНЕЦ ЛОГИКИ ПОДПИСКИ ---
 
     socket.on('join-room', (uid) => {
         userId = uid;

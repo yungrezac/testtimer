@@ -152,21 +152,32 @@ class UserSession {
         this.broadcastTime();
     }
 
-    disconnectTikTok() {
+    // Добавлена возможность передавать кастомное сообщение при отключении
+    disconnectTikTok(customMessage = 'Отключено') {
         if (this.tiktokConnection) { try { this.tiktokConnection.terminate(); } catch(e) {} this.tiktokConnection = null; }
         if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
         if (this.ttPingInterval) { clearInterval(this.ttPingInterval); this.ttPingInterval = null; }
-        this.statusText.tt = { text: 'Отключено', isActive: false, isStreamLive: false }; this.broadcastStatus();
+        this.statusText.tt = { text: customMessage, isActive: false, isStreamLive: false }; 
+        this.broadcastStatus();
     }
 
     connectTikTok(username, apiKey) {
         if (!username || !apiKey) return;
-        this.disconnectTikTok();
-        this.statusText.tt = { text: 'Подключение...', isActive: false, isStreamLive: false }; this.broadcastStatus();
+        this.disconnectTikTok('Подключение...');
 
         try {
-            const wsUrl = `wss://api.tik.tools?uniqueId=${encodeURIComponent(username)}&apiKey=${encodeURIComponent(apiKey.trim())}`;
-            this.tiktokConnection = new WebSocket(wsUrl);
+            // Очищаем никнейм от @ и пробелов, чтобы избежать ошибок 4004
+            const cleanUsername = username.trim().replace(/^@/, '');
+            const wsUrl = `wss://api.tik.tools?uniqueId=${encodeURIComponent(cleanUsername)}&apiKey=${encodeURIComponent(apiKey.trim())}`;
+            
+            // Добавляем заголовки, чтобы сервер не блокировал подключение
+            this.tiktokConnection = new WebSocket(wsUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Origin': 'https://tik.tools'
+                }
+            });
+            
             this.tiktokConnection.isAlive = true;
 
             this.tiktokConnection.on('open', () => {
@@ -174,7 +185,6 @@ class UserSession {
                 this.statusText.tt = { text: 'Успешно подключено', isActive: true, isStreamLive: false }; this.broadcastStatus();
                 this.emit('play-success-sound', {});
                 
-                // Надежный Ping-Pong для удержания соединения (каждые 30 сек)
                 this.ttPingInterval = setInterval(() => {
                     if (this.tiktokConnection && this.tiktokConnection.readyState === WebSocket.OPEN) {
                         if (this.tiktokConnection.isAlive === false) return this.tiktokConnection.terminate();
@@ -207,7 +217,15 @@ class UserSession {
 
             this.tiktokConnection.on('close', (code) => { 
                 if (this.ttPingInterval) clearInterval(this.ttPingInterval);
-                if (code === 4001 || code === 4003 || code === 4005 || code === 4404) { this.disconnectTikTok(); } 
+                
+                // Перехватываем ошибки и выводим их в интерфейс
+                if (code === 4001) this.disconnectTikTok('Ошибка: Неверный API ключ (4001)');
+                else if (code === 4003 || code === 4000) this.disconnectTikTok('Ошибка: Стрим оффлайн (4003)');
+                else if (code === 4005) this.disconnectTikTok('Ошибка: Лимит подключений (4005)');
+                else if (code === 4404 || code === 4004) this.disconnectTikTok('Ошибка: Аккаунт не найден');
+                else if (code >= 4000 && code < 5000) {
+                    this.disconnectTikTok(`Отключено сервером (Код ${code})`);
+                }
                 else {
                     this.statusText.tt = { text: `Обрыв (${code}). Переподключение...`, isActive: false, isStreamLive: false }; this.broadcastStatus();
                     this.ttReconnectAttempts++;
@@ -215,8 +233,11 @@ class UserSession {
                     this.reconnectTimeout = setTimeout(() => this.connectTikTok(username, apiKey), delay);
                 }
             });
-            this.tiktokConnection.on('error', () => {});
-        } catch (err) { this.disconnectTikTok(); }
+            
+            this.tiktokConnection.on('error', (err) => {
+                // Игнорируем логирование, так как следом вызовется on('close')
+            });
+        } catch (err) { this.disconnectTikTok(`Ошибка: ${err.message}`); }
     }
 
 

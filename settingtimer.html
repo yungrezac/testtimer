@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Настройки Таймера — TikTimer</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        
+        body { background-color: #0f172a; color: #f8fafc; overflow: hidden; font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        
+        .dock-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .dock-btn:hover { transform: translateY(-3px); background: rgba(255,255,255,0.08); }
+        .dock-btn.active { background: rgba(99,102,241,0.2); color: #818cf8; box-shadow: 0 0 15px rgba(99,102,241,0.2); }
+        
+        .remote-widget { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .remote-hidden { transform: translateX(110%); }
+        .remote-visible { transform: translateX(0); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const socket = typeof io !== 'undefined' ? io() : { emit: () => {}, on: () => {}, off: () => {} };
+
+        const supabaseUrl = 'https://lqjagftaeejdufwwvjwd.supabase.co';
+        const supabaseKey = 'sb_publishable_6-9IBhMX9CMVbIackZAJ9g_UUk5FDqx'; 
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        const formatTime = (totalSeconds) => {
+            const h = Math.floor(Math.abs(totalSeconds) / 3600); const m = Math.floor((Math.abs(totalSeconds) % 3600) / 60); const s = Math.abs(totalSeconds) % 60;
+            return `${totalSeconds < 0 ? '-' : ''}${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        };
+
+        function RemoteWidget({ isOpen, onClose }) {
+            const [state, setState] = useState({ timeLeft: 0, currentTotalLikes: 0 }); 
+            const [customSeconds, setCustomSeconds] = useState(60); 
+            const [history, setHistory] = useState([]);
+
+            useEffect(() => { 
+                socket.on('timer-tick', s => setState(s)); 
+                socket.on('new-alert', data => setHistory(prev => [data, ...prev].slice(0, 50)));
+                return () => { socket.off('timer-tick'); socket.off('new-alert'); }; 
+            }, []);
+
+            return (
+                <div className={`remote-widget fixed top-4 right-4 bottom-28 w-[380px] bg-slate-900 border border-slate-700 rounded-[2rem] shadow-2xl flex flex-col p-6 z-[45] overflow-hidden ${isOpen ? 'remote-visible' : 'remote-hidden'}`}>
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center text-indigo-400"><i className="fa-solid fa-gamepad"></i></div>
+                            <h2 className="text-white font-bold text-sm uppercase tracking-wider">Пульт Управления</h2>
+                        </div>
+                        <button onClick={onClose} className="text-slate-400 hover:text-white transition bg-slate-800 w-7 h-7 rounded-full flex items-center justify-center"><i className="fa-solid fa-xmark"></i></button>
+                    </div>
+                    
+                    <div className="text-6xl font-black mb-6 text-center text-white">{formatTime(state.timeLeft)}</div>
+
+                    <div className="w-full mb-4 space-y-2">
+                        <div className="grid grid-cols-4 gap-1.5">
+                            {[60, 300, 600, 1800].map(s => <button key={`a${s}`} className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white border border-emerald-500/30 rounded-lg py-1.5 text-xs font-black transition" onClick={() => socket.emit('manual-add', s)}>+{s/60}м</button>)}
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5">
+                            {[60, 300, 600, 1800].map(s => <button key={`s${s}`} className="bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white border border-rose-500/30 rounded-lg py-1.5 text-xs font-black transition" onClick={() => socket.emit('manual-sub', s)}>-{s/60}м</button>)}
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-2 w-full mb-4">
+                        <button className="bg-indigo-600 hover:bg-indigo-500 text-white p-3 rounded-xl font-bold transition text-xs flex items-center justify-center gap-2" onClick={() => socket.emit('toggle-timer')}><i className="fa-solid fa-play"></i> СТАРТ / ПАУЗА</button>
+                        <button className="bg-purple-600 hover:bg-purple-500 text-white p-3 rounded-xl font-bold transition text-xs flex items-center justify-center gap-2" onClick={() => socket.emit('manual-trigger-roulette')}><i className="fa-solid fa-dice"></i> КРУТИТЬ РУЛЕТКУ</button>
+                    </div>
+
+                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">История событий</h3>
+                    <div className="flex-1 overflow-y-auto bg-slate-950 rounded-xl p-2 border border-slate-800 flex flex-col gap-2 relative">
+                        {history.map((h, i) => (
+                            <div key={i} className="flex items-center gap-3 bg-slate-900 p-2 rounded-lg border border-slate-800 text-white">
+                                <img src={h.avatar || 'https://via.placeholder.com/32'} className="w-8 h-8 rounded-full object-cover" />
+                                <div className="flex flex-col flex-1 overflow-hidden text-xs">
+                                    <span className="font-bold truncate">{h.username}</span>
+                                    <span className="text-slate-400 truncate">{h.giftName || h.type}</span>
+                                </div>
+                                <span className={`text-xs font-black ${h.timeAdded > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{h.timeAdded > 0 ? '+' : ''}{h.timeAdded}с</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        function TimerSettingsApp({ user }) {
+            const [activeTimerTab, setActiveTimerTab] = useState('settings');
+            const [isRunning, setIsRunning] = useState(false);
+            const [isRemoteOpen, setIsRemoteOpen] = useState(false);
+
+            const defConfig = {
+                initialTime: 60, bonusEnabled: true, bonusMin: 60, bonusMax: 300,
+                likesEnabled: true, likeThreshold: 100, likeTime: 10,
+                subsEnabled: true, subTime: 180,
+                isMultiplierGiftEnabled: true, multiplierValue: 2, multiplierDuration: 60,
+                rouletteSlots: [],
+                styles: { fontFamily: 'Inter', timerColor: '#ffffff' }
+            };
+
+            const [config, setConfig] = useState(defConfig);
+
+            useEffect(() => {
+                socket.emit('join-room', user.id);
+                supabase.from('ttimer_settings').select('config').eq('user_id', user.id).single().then(({ data }) => {
+                    if (data && data.config) setConfig(p => ({ ...p, ...data.config }));
+                });
+                socket.on('timer-tick', s => setIsRunning(s.isRunning));
+                return () => socket.off('timer-tick');
+            }, [user.id]);
+
+            const handleSave = async () => {
+                await supabase.from('ttimer_settings').upsert({ user_id: user.id, config });
+                socket.emit('update-settings', config);
+            };
+
+            const DockBtn = ({ id, icon, text }) => (
+                <button onClick={() => setActiveTimerTab(id)} className={`dock-btn flex flex-col items-center justify-center gap-1 w-20 h-14 rounded-2xl relative ${activeTimerTab === id ? 'active' : 'text-slate-400'}`}>
+                    <i className={`${icon} text-lg`}></i>
+                    <span className="text-[10px] font-bold">{text}</span>
+                </button>
+            );
+
+            return (
+                <div className="flex flex-col h-screen bg-slate-950 text-slate-200 overflow-hidden relative">
+                    {/* Top Navigation Bar */}
+                    <header className="h-16 bg-slate-900 border-b border-slate-800 px-8 flex items-center justify-between z-20 shrink-0">
+                        <div className="flex items-center gap-4">
+                            <a href="/index.html" className="text-slate-400 hover:text-white text-xs font-bold transition flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                                <i className="fa-solid fa-arrow-left"></i> К подсоединениям
+                            </a>
+                            <h1 className="text-lg font-black text-white">Модуль Настройки Таймера</h1>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition shadow-lg flex items-center gap-2">
+                                <i className="fa-solid fa-floppy-disk"></i> Сохранить
+                            </button>
+                            {isRunning ? (
+                                <button onClick={() => socket.emit('stop-timer')} className="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition"><i className="fa-solid fa-stop"></i> Стоп</button>
+                            ) : (
+                                <button onClick={() => socket.emit('start-timer', config)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition"><i className="fa-solid fa-play"></i> Запуск</button>
+                            )}
+                        </div>
+                    </header>
+
+                    {/* Viewport Content */}
+                    <main className="flex-1 overflow-y-auto p-10 pb-32">
+                        <div className="max-w-4xl mx-auto animate-fade-in-up">
+                            {activeTimerTab === 'settings' && (
+                                <div className="space-y-6">
+                                    <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-xl">
+                                        <h3 className="font-bold text-white mb-4 text-lg">Базовые параметры</h3>
+                                        <label className="text-xs text-slate-400 block mb-2 font-bold">Начальное время (мин)</label>
+                                        <input type="number" value={config.initialTime} onChange={e => setConfig({ ...config, initialTime: Number(e.target.value) })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-2xl font-black text-white outline-none" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
+                                            <h3 className="font-bold text-emerald-400 mb-2">Настройка Лайков</h3>
+                                            <div className="flex gap-2 items-center">
+                                                <span className="text-xs text-slate-400">За каждые</span>
+                                                <input type="number" value={config.likeThreshold} onChange={e => setConfig({ ...config, likeThreshold: Number(e.target.value) })} className="w-20 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold" />
+                                                <span className="text-xs text-slate-400">лайков +</span>
+                                                <input type="number" value={config.likeTime} onChange={e => setConfig({ ...config, likeTime: Number(e.target.value) })} className="w-16 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-emerald-400 font-bold" />
+                                                <span className="text-xs text-slate-400">сек</span>
+                                            </div>
+                                        </div>
+                                        <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
+                                            <h3 className="font-bold text-indigo-400 mb-2">Подписки</h3>
+                                            <div className="flex gap-2 items-center">
+                                                <span className="text-xs text-slate-400">За новый фоллов +</span>
+                                                <input type="number" value={config.subTime} onChange={e => setConfig({ ...config, subTime: Number(e.target.value) })} className="w-20 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-indigo-400 font-bold" />
+                                                <span className="text-xs text-slate-400">сек</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTimerTab === 'buffs' && (
+                                <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl">
+                                    <h3 className="font-bold text-amber-400 text-lg mb-4">Настройка Ускорения Х</h3>
+                                    <div className="flex gap-4">
+                                        <div><label className="text-xs font-bold text-slate-500 block mb-1">Множитель</label><input type="number" value={config.multiplierValue} onChange={e => setConfig({ ...config, multiplierValue: Number(e.target.value) })} className="bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 font-bold text-white" /></div>
+                                        <div><label className="text-xs font-bold text-slate-500 block mb-1">Длительность (сек)</label><input type="number" value={config.multiplierDuration} onChange={e => setConfig({ ...config, multiplierDuration: Number(e.target.value) })} className="bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 font-bold text-white" /></div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTimerTab === 'obs' && (
+                                <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl space-y-4">
+                                    <h3 className="font-bold text-white text-lg">Ссылки источников OBS</h3>
+                                    <div>
+                                        <span className="text-xs font-bold text-slate-400 block mb-1">Таймер</span>
+                                        <input type="text" readOnly value={`${window.location.origin}/timer.html?uid=${user.id}`} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-indigo-400 font-mono" />
+                                    </div>
+                                    <div>
+                                        <span className="text-xs font-bold text-slate-400 block mb-1">Рулетка</span>
+                                        <input type="text" readOnly value={`${window.location.origin}/rullete.html?uid=${user.id}`} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-xs text-purple-400 font-mono" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    {/* Bottom Dock Menu */}
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-xl border border-slate-700 p-2 rounded-[2rem] shadow-2xl flex items-center gap-2 z-40">
+                        <DockBtn id="settings" icon="fa-solid fa-sliders" text="База" />
+                        <DockBtn id="buffs" icon="fa-solid fa-bolt" text="Триггеры" />
+                        <DockBtn id="obs" icon="fa-solid fa-camera" text="OBS" />
+                        
+                        <div className="w-px h-8 bg-slate-700 mx-2"></div>
+                        
+                        <button onClick={() => setIsRemoteOpen(!isRemoteOpen)} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 h-12 rounded-xl font-bold transition shadow-lg">
+                            <i className="fa-solid fa-gamepad"></i>
+                            <span className="text-xs uppercase">ПУЛЬТ</span>
+                        </button>
+                    </div>
+
+                    <RemoteWidget isOpen={isRemoteOpen} onClose={() => setIsRemoteOpen(false)} />
+                </div>
+            );
+        }
+
+        function App() {
+            const [user, setUser] = useState(null); 
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                supabase.auth.getSession().then(({ data: { session } }) => { 
+                    setUser(session?.user ?? null);
+                    setLoading(false);
+                });
+            }, []);
+
+            if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-indigo-500"><i className="fa-solid fa-circle-notch fa-spin text-4xl"></i></div>;
+            if (!user) return <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-white font-bold"><p>Пожалуйста, авторизуйтесь на <a href="/index.html" className="text-indigo-400 underline">главной странице</a>.</p></div>;
+            
+            return <TimerSettingsApp user={user} />;
+        }
+        
+        const root = ReactDOM.createRoot(document.getElementById('root')); 
+        root.render(<App />);
+    </script>
+</body>
+</html>

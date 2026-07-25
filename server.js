@@ -142,7 +142,7 @@ class UserSession {
     }
 
     checkRouletteQueue() {
-        if (this.isRouletteBusy || this.rouletteQueue.length === 0 || this.timerState.isVictory) return;
+        if (this.isRouletteBusy || this.rouletteQueue.length === 0) return;
         this.isRouletteBusy = true; this.spinRoulette(this.rouletteQueue.shift());
     }
 
@@ -159,6 +159,7 @@ class UserSession {
     }
 
     disconnectTikTok() {
+        this.manualTtDisconnect = true;
         if (this.tiktokConnection) { try { this.tiktokConnection.terminate(); } catch(e) {} this.tiktokConnection = null; }
         if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
         if (this.ttPingInterval) { clearInterval(this.ttPingInterval); this.ttPingInterval = null; }
@@ -168,10 +169,10 @@ class UserSession {
     connectTikTok(username, apiKey) {
         if (!username || !apiKey) return;
         
-        // Очистка ника от @ и пробелов
         const cleanUsername = username.replace(/[@\s]/g, '');
         
         this.disconnectTikTok();
+        this.manualTtDisconnect = false;
         this.statusText.tt = { text: 'Подключение...', isActive: false, isStreamLive: false }; this.broadcastStatus();
 
         try {
@@ -184,7 +185,6 @@ class UserSession {
                 this.statusText.tt = { text: 'Успешно подключено', isActive: true, isStreamLive: false }; this.broadcastStatus();
                 this.emit('play-success-sound', {});
                 
-                // Надежный Ping/Pong без принудительных обрывов из-за тишины в чате
                 this.ttPingInterval = setInterval(() => {
                     if (this.tiktokConnection && this.tiktokConnection.readyState === WebSocket.OPEN) {
                         if (this.tiktokConnection.isAlive === false) return this.tiktokConnection.terminate();
@@ -216,9 +216,10 @@ class UserSession {
             });
 
             this.tiktokConnection.on('close', (code, reason) => { 
+                if (this.manualTtDisconnect) return;
+                
                 if (this.ttPingInterval) clearInterval(this.ttPingInterval);
                 
-                // Точное отображение ошибок
                 let errorMsg = `Обрыв (${code})`;
                 if (code === 4003) errorMsg = 'Стрим оффлайн (4003)';
                 else if (code === 4001) errorMsg = 'Неверный API ключ (4001)';

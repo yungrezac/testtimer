@@ -34,7 +34,6 @@ class UserSession {
         
         // Подключения TikTok
         this.tiktokConnection = null;
-        this.tikToolWatchdog = null;
         this.ttPingInterval = null;
         this.reconnectTimeout = null;
         this.ttReconnectAttempts = 0;
@@ -155,7 +154,6 @@ class UserSession {
 
     disconnectTikTok() {
         if (this.tiktokConnection) { try { this.tiktokConnection.terminate(); } catch(e) {} this.tiktokConnection = null; }
-        if (this.tikToolWatchdog) { clearTimeout(this.tikToolWatchdog); this.tikToolWatchdog = null; }
         if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
         if (this.ttPingInterval) { clearInterval(this.ttPingInterval); this.ttPingInterval = null; }
         this.statusText.tt = { text: 'Отключено', isActive: false, isStreamLive: false }; this.broadcastStatus();
@@ -176,20 +174,20 @@ class UserSession {
                 this.statusText.tt = { text: 'Успешно подключено', isActive: true, isStreamLive: false }; this.broadcastStatus();
                 this.emit('play-success-sound', {});
                 
+                // Надежный Ping-Pong для удержания соединения (каждые 30 сек)
                 this.ttPingInterval = setInterval(() => {
                     if (this.tiktokConnection && this.tiktokConnection.readyState === WebSocket.OPEN) {
                         if (this.tiktokConnection.isAlive === false) return this.tiktokConnection.terminate();
-                        this.tiktokConnection.isAlive = false; this.tiktokConnection.ping();
+                        this.tiktokConnection.isAlive = false; 
+                        this.tiktokConnection.ping();
                     }
                 }, 30000);
-                this.tikToolWatchdog = setTimeout(() => this.disconnectTikTok(), 180000);
             });
 
             this.tiktokConnection.on('pong', () => { if (this.tiktokConnection) this.tiktokConnection.isAlive = true; });
 
             this.tiktokConnection.on('message', (msg) => {
                 if (this.tiktokConnection) this.tiktokConnection.isAlive = true;
-                if (this.tikToolWatchdog) { clearTimeout(this.tikToolWatchdog); this.tikToolWatchdog = setTimeout(() => this.disconnectTikTok(), 180000); }
                 
                 if (!this.statusText.tt.isStreamLive) {
                     this.statusText.tt.isStreamLive = true;
@@ -220,6 +218,7 @@ class UserSession {
             this.tiktokConnection.on('error', () => {});
         } catch (err) { this.disconnectTikTok(); }
     }
+
 
     handleTikTokGift(data) {
         if (this.timerState.isVictory || this.timerState.isRollingBonus) return;

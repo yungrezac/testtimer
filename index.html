@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASTRAL GAME WEB</title>
+    <title>TikTimer</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -199,7 +199,7 @@
                 <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-white" style={{ fontFamily: 'Inter' }}>
                     <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl w-full max-w-md">
                         <div className="flex justify-center mb-6"><span className="text-5xl drop-shadow-[0_0_20px_rgba(99,102,241,0.5)]">⚡</span></div>
-                        <h1 className="text-3xl font-black text-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 mb-6">ASTRAL GAME WEB</h1>
+                        <h1 className="text-3xl font-black text-center text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 mb-6">TikTimer</h1>
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                             {error && <div className="bg-rose-500/20 border border-rose-500 text-rose-400 p-3 rounded-xl text-sm text-center">{error}</div>}
                             <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-3 outline-none focus:border-indigo-500" required />
@@ -292,7 +292,7 @@
                             <div className="relative z-10">
                                 <div className="flex items-center gap-3 mb-8">
                                     <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center border border-indigo-500/30"><i className="fa-solid fa-bolt text-indigo-400 text-xl"></i></div>
-                                    <h2 className="text-2xl font-black tracking-widest text-white">ASTRAL GAME</h2>
+                                    <h2 className="text-2xl font-black tracking-widest text-white">TikTimer</h2>
                                 </div>
                                 <h1 className="text-4xl sm:text-5xl font-black text-white leading-tight mb-6">Получите полный доступ к <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">PRO версии</span></h1>
                                 <ul className="space-y-4 mb-8">
@@ -412,7 +412,7 @@
                             {/* Виджет подписки */}
                             <div className="bg-gradient-to-br from-indigo-900/40 to-slate-800/40 border border-indigo-500/30 p-4 rounded-xl relative overflow-hidden">
                                 <div className="absolute top-0 right-0 p-2 opacity-20"><i className="fa-solid fa-crown text-4xl text-indigo-400"></i></div>
-                                <h4 className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider mb-1">Astral Game PRO</h4>
+                                <h4 className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider mb-1">PRO</h4>
                                 <div className="text-2xl font-black text-white mb-2">{daysLeft} <span className="text-sm font-semibold text-slate-400">дней</span></div>
                                 <div className="w-full h-1.5 bg-slate-950 rounded-full mb-3 overflow-hidden">
                                     <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500" style={{ width: `${Math.min(100, (daysLeft/30)*100)}%` }}></div>

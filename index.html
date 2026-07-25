@@ -230,7 +230,76 @@
             );
         }
 
+        function SubscriptionScreen({ user, onLogout, onVerified }) {
+            const [amount, setAmount] = useState(null);
+            const [wallet, setWallet] = useState('');
+            const [checking, setChecking] = useState(false);
+            const [error, setError] = useState('');
+
+            useEffect(() => {
+                socket.on('payment-created', (data) => { setAmount(data.amount); setWallet(data.wallet); });
+                socket.on('payment-success', (data) => { setChecking(false); onVerified(data.expireDate); });
+                socket.on('payment-not-found', () => { setChecking(false); setError('Платеж пока не найден. Подождите пару минут и попробуйте снова.'); });
+                socket.on('payment-error', () => { setChecking(false); setError('Ошибка при проверке. Повторите попытку позже.'); });
+                
+                return () => { socket.off('payment-created'); socket.off('payment-success'); socket.off('payment-not-found'); socket.off('payment-error'); };
+            }, []);
+
+            const handleBuy = () => { socket.emit('create-payment', user.id); setError(''); };
+            const handleCheck = () => { setChecking(true); setError(''); socket.emit('verify-payment', { uid: user.id, amount }); };
+
+            return (
+                <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-white relative z-50 p-6" style={{ fontFamily: 'Inter' }}>
+                    <div className="absolute top-6 right-6">
+                        <button onClick={onLogout} className="text-rose-500 hover:text-rose-400 font-bold">Выйти</button>
+                    </div>
+                    
+                    <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl w-full max-w-xl flex flex-col items-center text-center">
+                        <i className="fa-solid fa-lock text-6xl text-indigo-500 mb-6 drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]"></i>
+                        <h1 className="text-3xl font-black text-white mb-2">Доступ ограничен</h1>
+                        <p className="text-slate-400 mb-8">Для использования Astral Game необходима активная подписка. Стоимость: <span className="font-bold text-emerald-400">50 USDT</span> / 30 дней.</p>
+
+                        {!amount ? (
+                            <button onClick={handleBuy} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 w-full py-4 rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(99,102,241,0.4)] transition">
+                                Приобрести доступ
+                            </button>
+                        ) : (
+                            <div className="w-full bg-slate-950 border border-indigo-500/30 p-6 rounded-2xl animate-fade-in-up">
+                                <h3 className="text-lg font-bold text-indigo-300 mb-4">Ожидание оплаты</h3>
+                                
+                                <div className="space-y-4 text-left">
+                                    <div>
+                                        <label className="text-xs text-slate-500 font-bold uppercase">Сумма к отправке (строго точно!)</label>
+                                        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex justify-between items-center mt-1">
+                                            <span className="font-mono text-2xl text-emerald-400 font-black">{amount} USDT</span>
+                                            <button onClick={() => navigator.clipboard.writeText(amount)} className="text-slate-400 hover:text-white"><i className="fa-solid fa-copy"></i></button>
+                                        </div>
+                                        <p className="text-xs text-rose-400 mt-1">*Отправьте именно эту сумму с копейками для автоматического зачисления.</p>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="text-xs text-slate-500 font-bold uppercase">Сеть: TON (The Open Network)</label>
+                                        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex justify-between items-center mt-1 gap-2">
+                                            <span className="font-mono text-sm text-slate-300 break-all">{wallet}</span>
+                                            <button onClick={() => navigator.clipboard.writeText(wallet)} className="text-slate-400 hover:text-white"><i className="fa-solid fa-copy"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {error && <div className="mt-4 bg-rose-500/20 text-rose-400 border border-rose-500/50 p-3 rounded-lg text-sm">{error}</div>}
+
+                                <button onClick={handleCheck} disabled={checking} className={`mt-6 w-full py-4 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2 ${checking ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.3)]'}`}>
+                                    {checking ? <><i className="fa-solid fa-circle-notch fa-spin"></i> Проверяем блокчейн...</> : 'Я оплатил, проверить'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
         function MainApp({ user, onLogout }) {
+            const [subActive, setSubActive] = useState(null); // null = загрузка
             const [activeTab, setActiveTab] = useState('connect');
             const [status, setStatus] = useState({ tt: { text: 'Ожидание', isActive: false, isStreamLive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' });
             const [isRunning, setIsRunning] = useState(false);
@@ -262,7 +331,14 @@
 
             useEffect(() => {
                 socket.emit('join-room', user.id);
-                supabase.from('ttimer_settings').select('config').eq('user_id', user.id).single().then(({ data, error }) => {
+                supabase.from('ttimer_settings').select('config, subscription_until').eq('user_id', user.id).single().then(({ data, error }) => {
+                    // Проверка подписки
+                    if (data && data.subscription_until) {
+                        setSubActive(new Date(data.subscription_until) > new Date());
+                    } else {
+                        setSubActive(false); // Если записи нет или даты нет
+                    }
+
                     if (data && data.config) {
                         const merged = { ...defConfig, ...data.config, styles: { ...defConfig.styles, ...(data.config.styles || {}) } };
                         setConfig(merged); setSavedConfig(merged);
@@ -287,6 +363,16 @@
             const TabBtn = ({ id, icon, text }) => ( <button onClick={() => { if(hasChanges) { document.getElementById('save-bar')?.classList.add('animate-shake'); setTimeout(()=>document.getElementById('save-bar')?.classList.remove('animate-shake'), 400); return;} setActiveTab(id); }} className={`w-full flex items-center gap-3 px-6 py-4 font-semibold transition ${activeTab === id ? 'tab-active' : 'tab-inactive'}`}><i className={icon + " w-5 text-center text-lg"}></i> {text}</button> );
 
             const appFontFamily = config.styles?.fontFamily || 'Inter';
+
+            // Если загрузка статуса подписки еще идет
+            if (subActive === null) return <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-indigo-500 text-4xl"><i className="fa-solid fa-circle-notch fa-spin"></i></div>;
+            
+            // Если подписка неактивна, показываем экран оплаты
+            if (!subActive) return <SubscriptionScreen user={user} onLogout={onLogout} onVerified={(expireDate) => {
+                setSubActive(true);
+                // Если у пользователя не было конфига, сохраняем дефолтный чтобы создать строку в БД
+                supabase.from('ttimer_settings').upsert({ user_id: user.id, config: defConfig, subscription_until: expireDate }).then(()=>{});
+            }} />;
 
             return (
                 <div className="flex h-screen bg-slate-950 text-slate-200" style={{ fontFamily: appFontFamily }}>

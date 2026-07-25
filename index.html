@@ -229,7 +229,7 @@
                     setTimeout(() => {
                         if (qrRef.current) {
                             qrRef.current.innerHTML = '';
-                            new QRCode(qrRef.current, { text: `ton://transfer/${data.wallet}?amount=${data.amount * 1000000000}&text=AstralGame`, width: 180, height: 180, colorDark : "#0f172a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
+                            new QRCode(qrRef.current, { text: `ton://transfer/${data.wallet}?amount=${data.amount * 1000000000}&text=TikTimer`, width: 180, height: 180, colorDark : "#0f172a", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H });
                         }
                     }, 100);
                 };
@@ -268,7 +268,7 @@
                                 <span className="text-emerald-400 font-mono text-3xl font-black">{amount} USDT</span>
                                 <span className="text-rose-400 text-[10px] mt-1 font-semibold">*Переведите ТОЧНО эту сумму (включая копейки)!</span>
                             </div>
-                            <a href={`ton://transfer/${wallet}?amount=${amount * 1000000000}&text=AstralGame`} className="w-full bg-[#3390ec] hover:bg-[#2a7bcf] text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 mb-3 shadow-lg">
+                            <a href={`ton://transfer/${wallet}?amount=${amount * 1000000000}&text=TikTimer`} className="w-full bg-[#3390ec] hover:bg-[#2a7bcf] text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 mb-3 shadow-lg">
                                 <i className="fa-solid fa-wallet"></i> Открыть Tonkeeper
                             </a>
                             <button onClick={() => { setChecking(true); setError(''); socket.emit('verify-payment', { uid: user.id, amount }); }} disabled={checking} className="w-full bg-slate-800 hover:bg-slate-700 text-emerald-400 py-3 rounded-xl font-bold transition border border-slate-700">
@@ -384,7 +384,7 @@
                     <div className="w-72 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shrink-0 shadow-2xl relative">
                         <div className="p-6 border-b border-slate-800 flex flex-col gap-2 relative">
                             <div className="flex items-center gap-3">
-                                <span className="text-3xl drop-shadow-md">⚡</span><h1 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 leading-none">ASTRAL<br/>GAME</h1>
+                                <span className="text-3xl drop-shadow-md">⚡</span><h1 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 leading-none">TikTimer<br/>beta</h1>
                             </div>
                             
                             <div className="flex items-center gap-4 mt-2">

@@ -1,5 +1,5 @@
 {
-"name": "astral-game-web",
+"name": "TikTimer",
 "version": "2.1.0",
 "description": "TikTok Live Timer & Roulette Web App",
 "main": "server.js",

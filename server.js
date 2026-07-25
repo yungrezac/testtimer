@@ -11,7 +11,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 // --- НАСТРОЙКИ БАЗЫ И ОПЛАТЫ ---
 const SUPABASE_URL = 'https://lqjagftaeejdufwwvjwd.supabase.co';
 // ВАЖНО: ЗАМЕНИТЕ НА ВАШ ИСТИННЫЙ SERVICE_ROLE KEY (из настроек Supabase -> API -> service_role secret)
-const SUPABASE_SERVICE_KEY = 'sb_secret_ABawG1Kn1TBgeDM6JBB0KQ_bJvj_77m'; 
+const SUPABASE_SERVICE_KEY = 'sb_publishable_6-9IBhMX9CMVbIackZAJ9g_UUk5FDqx'; 
 const TON_WALLET = 'UQDCBh7hF8vHZOh5kd81c8eKKj5bF1ymVTW09kdYd66-0q7T';
 
 app.use(express.static(path.join(__dirname, '/')));
@@ -615,9 +615,6 @@ io.on('connection', (socket) => {
             const randomCents = Math.floor(Math.random() * 999) + 1;
             const amount = parseFloat((50 + (randomCents / 1000)).toFixed(3));
             
-            const fetchModule = require('node-fetch'); // В Node 18+ можно без этого, но для надежности
-            const fetch = fetchModule.default || fetchModule;
-
             const res = await fetch(`${SUPABASE_URL}/rest/v1/crypto_payments`, {
                 method: 'POST',
                 headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
@@ -635,9 +632,6 @@ io.on('connection', (socket) => {
 
     socket.on('verify-payment', async ({ uid, amount }) => {
         try {
-            const fetchModule = require('node-fetch');
-            const fetch = fetchModule.default || fetchModule;
-
             // Проверка через публичный TonAPI (упрощенная)
             const tonRes = await fetch(`https://tonapi.io/v2/blockchain/accounts/${TON_WALLET}/transactions?limit=15`);
             const data = await tonRes.json();

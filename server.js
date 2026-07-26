@@ -10,7 +10,7 @@ const io = new Server(server, { cors: { origin: '*' } });
 
 // --- НАСТРОЙКИ БАЗЫ И ОПЛАТЫ ---
 const SUPABASE_URL = 'https://lqjagftaeejdufwwvjwd.supabase.co';
-// ВАЖНО: ЗАМЕНИТЕ НА ВАШ ИСТИННЫЙ SERVICE_ROLE KEY (из настроек Supabase -> API -> service_role secret)
+// ВАЖНО: ЗАМЕНИТЕ НА ВАШ ИСТИННЫЙ SERVICE_ROLE KEY
 const SUPABASE_SERVICE_KEY = 'sb_publishable_6-9IBhMX9CMVbIackZAJ9g_UUk5FDqx'; 
 const TON_WALLET = 'UQDCBh7hF8vHZOh5kd81c8eKKj5bF1ymVTW09kdYd66-0q7T';
 
@@ -37,6 +37,9 @@ class UserSession {
         
         this.rouletteQueue = [];
         this.isRouletteBusy = false;
+        
+        // История событий для стабильности пульта (сохраняем последние 50)
+        this.alertHistory = [];
         
         // Подключения TikTok
         this.tiktokConnection = null;
@@ -97,7 +100,13 @@ class UserSession {
         });
     }
 
-    broadcastAlert(data) { this.emit('new-alert', data); }
+    broadcastAlert(data) { 
+        // Сохраняем в историю сервера для восстановления на пульте
+        this.alertHistory.unshift(data);
+        if (this.alertHistory.length > 50) this.alertHistory.pop();
+        this.emit('new-alert', data); 
+    }
+    
     broadcastStatus() { this.emit('status-update', this.statusText); }
 
     addTime(amount, username, ignoreMultiplier = false) {
@@ -114,7 +123,6 @@ class UserSession {
         let oldTime = this.timerState.timeLeft;
         this.timerState.timeLeft += timeChange;
         
-        // Prevent going below zero
         if (this.timerState.timeLeft <= 0) {
             this.timerState.timeLeft = 0;
             if (oldTime > 0) this.timerState.bonusTriggerUser = username;
@@ -365,7 +373,10 @@ class UserSession {
             }
         }
 
-        if (!this.timerState.settings.likesEnabled) return;
+        if (!this.timerState.settings.likesEnabled) {
+            this.broadcastTime();
+            return;
+        }
         const limit = parseInt(this.timerState.settings.likeThreshold) || 100;
         const userId = data.uniqueId || data.user?.uniqueId || String(Math.random());
         this.timerState.userLikes[userId] = (this.timerState.userLikes[userId] || 0) + batchLikes;
@@ -528,6 +539,10 @@ io.on('connection', (socket) => {
         const session = getSession(userId);
         socket.emit('status-update', session.statusText);
         socket.emit('settings-updated', session.timerState.settings);
+        
+        // Отправляем сохраненную историю пультам для синхронизации
+        socket.emit('init-remote-data', { history: session.alertHistory });
+        
         session.broadcastTime();
     });
 
@@ -632,10 +647,8 @@ io.on('connection', (socket) => {
 
     socket.on('verify-payment', async ({ uid, amount }) => {
         try {
-            // Переводим ожидаемую сумму в нано-единицы (1 TON/USDT = 1 000 000 000 nano)
             const expectedNano = Math.floor(amount * 1000000000);
             
-            // Запрашиваем последние 15 транзакций кошелька
             const tonRes = await fetch(`https://tonapi.io/v2/blockchain/accounts/${TON_WALLET}/transactions?limit=15`);
             const data = await tonRes.json();
             
@@ -643,13 +656,10 @@ io.on('connection', (socket) => {
 
             let found = false;
             for (let tx of data.transactions) {
-                // Если нет входящего сообщения или сумма равна 0 - пропускаем
                 if (!tx.in_msg || !tx.in_msg.value || tx.in_msg.value === '0') continue;
                 
-                // Получаем сумму транзакции
                 const txValue = parseInt(tx.in_msg.value, 10);
                 
-                // СТРОГАЯ ПРОВЕРКА: Сумма должна совпадать копейка в копейку
                 if (txValue === expectedNano) {
                     found = true; 
                     break; 
@@ -657,14 +667,12 @@ io.on('connection', (socket) => {
             }
 
             if (found) {
-                // 1. Получаем текущую дату окончания подписки пользователя
                 const userRes = await fetch(`${SUPABASE_URL}/rest/v1/ttimer_settings?user_id=eq.${uid}&select=subscription_until`, {
                     headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` }
                 });
                 const userData = await userRes.json();
                 
                 let currentExpire = new Date();
-                // Если подписка уже есть и она еще не закончилась, отсчитываем от нее
                 if (userData && userData.length > 0 && userData[0].subscription_until) {
                     const dbDate = new Date(userData[0].subscription_until);
                     if (dbDate > currentExpire) {
@@ -672,17 +680,14 @@ io.on('connection', (socket) => {
                     }
                 }
                 
-                // 2. Добавляем ровно 30 дней
                 currentExpire.setDate(currentExpire.getDate() + 30);
                 
-                // 3. Сохраняем новую дату в базу
                 await fetch(`${SUPABASE_URL}/rest/v1/ttimer_settings?user_id=eq.${uid}`, {
                     method: 'PATCH',
                     headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ subscription_until: currentExpire.toISOString() })
                 });
 
-                // 4. Помечаем платеж как использованный
                 await fetch(`${SUPABASE_URL}/rest/v1/crypto_payments?user_id=eq.${uid}&expected_amount=eq.${amount}`, {
                     method: 'PATCH',
                     headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json' },

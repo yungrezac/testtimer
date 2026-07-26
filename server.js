@@ -166,12 +166,12 @@ class UserSession {
         this.broadcastTime();
     }
 
-    disconnectTikTok() {
+    disconnectTikTok(customText = 'Отключено') {
         this.manualTtDisconnect = true;
         if (this.tiktokConnection) { try { this.tiktokConnection.terminate(); } catch(e) {} this.tiktokConnection = null; }
         if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
         if (this.ttPingInterval) { clearInterval(this.ttPingInterval); this.ttPingInterval = null; }
-        this.statusText.tt = { text: 'Отключено', isActive: false, isStreamLive: false }; this.broadcastStatus();
+        this.statusText.tt = { text: customText, isActive: false, isStreamLive: false }; this.broadcastStatus();
     }
 
     connectTikTok(username, apiKey) {
@@ -219,6 +219,9 @@ class UserSession {
                         if (eventName === 'gift') this.handleTikTokGift(data);
                         else if (eventName === 'like') this.handleTikTokLike(data);
                         else if (eventName === 'follow' || eventName === 'subscribe' || eventName === 'social') this.handleTikTokFollow(data);
+                        else if (eventName === 'streamEnd' || eventName === 'room_close' || eventName === 'live_end' || eventName === 'live_ended') {
+                            this.disconnectTikTok('Стрим завершен');
+                        }
                     });
                 } catch (e) {}
             });
@@ -232,8 +235,9 @@ class UserSession {
                 if (code === 4003) errorMsg = 'Стрим оффлайн (4003)';
                 else if (code === 4001) errorMsg = 'Неверный API ключ (4001)';
                 else if (code === 4404) errorMsg = 'Аккаунт не найден (4404)';
+                else if (code === 1000 || code === 1005) errorMsg = 'Стрим завершен';
 
-                if (code === 4001 || code === 4003 || code === 4005 || code === 4404) { 
+                if (code === 4001 || code === 4003 || code === 4005 || code === 4404 || code === 1000 || code === 1005) { 
                     this.statusText.tt = { text: errorMsg, isActive: false, isStreamLive: false }; 
                     this.broadcastStatus();
                     this.tiktokConnection = null;

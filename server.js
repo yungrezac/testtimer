@@ -58,6 +58,9 @@ class UserSession {
         
         this.statusText = { tt: { text: 'Ожидание', isActive: false, isStreamLive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' };
         
+        // Таймер для троттлинга отправки времени (защита от фризов)
+        this._broadcastTimer = null;
+
         this.startEngine();
     }
 
@@ -88,6 +91,15 @@ class UserSession {
                 this.broadcastTime();
             }
         }, 1000);
+    }
+
+    // Сглаженная отправка обновлений для защиты фронтенда от зависаний
+    requestBroadcast() {
+        if (this._broadcastTimer) return;
+        this._broadcastTimer = setTimeout(() => {
+            this.broadcastTime();
+            this._broadcastTimer = null;
+        }, 100); // Группирует все изменения в окне 100мс
     }
 
     broadcastTime() {
@@ -163,7 +175,8 @@ class UserSession {
 
         let addedTime = this.addTime(Math.floor(amountInRub), username);
         this.broadcastAlert({ id: Date.now(), username, avatar: 'https://cdn-icons-png.flaticon.com/512/5272/5272370.png', giftName: `Донат ${rawAmount}`, timeAdded: addedTime, type: 'gift', amount: 1, targetTime: this.timerState.timeLeft });
-        this.broadcastTime();
+        
+        this.requestBroadcast(); // Оптимизировано
     }
 
     disconnectTikTok(customText = 'Отключено') {
@@ -276,19 +289,19 @@ class UserSession {
             this.checkRouletteQueue();
             if (this.timerState.settings.rouletteGiftAddsCost && totalCoins > 0) addedTime = this.addTime(totalCoins, nickname, true);
             this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: addedTime, type: 'roulette', amount: count, targetTime: this.timerState.timeLeft });
-            this.broadcastTime(); return;
+            this.requestBroadcast(); return;
         }
 
         if (this.timerState.settings.isMultiplierGiftEnabled && this.checkIds(this.timerState.settings.giftMultiplierIds, giftIdStr)) {
             this.multiplierState = { isActive: true, type: 'buff', value: this.timerState.settings.multiplierValue || 2, timeLeft: (this.timerState.settings.multiplierDuration || 60) * count };
             this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: 0, type: 'multiplier', amount: count, targetTime: this.timerState.timeLeft });
-            this.broadcastTime(); return;
+            this.requestBroadcast(); return;
         }
 
         if (this.timerState.settings.isDebuffGiftEnabled && this.checkIds(this.timerState.settings.giftDebuffIds, giftIdStr)) {
             this.multiplierState = { isActive: true, type: 'debuff', value: this.timerState.settings.debuffValue || 2, timeLeft: (this.timerState.settings.debuffDuration || 60) * count };
             this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: 0, type: 'debuff', amount: count, targetTime: this.timerState.timeLeft });
-            this.broadcastTime(); return;
+            this.requestBroadcast(); return;
         }
 
         if (this.timerState.settings.isPenaltyEnabled !== false && this.checkIds(this.timerState.settings.giftPenaltyIds, giftIdStr)) {
@@ -296,13 +309,14 @@ class UserSession {
             let mult = this.multiplierState.isActive ? this.multiplierState.value : 1; 
             let basePenalty = (this.timerState.settings.penaltyAmount || 600); 
             let threshold = (this.timerState.settings.penaltyThreshold || 300); 
-            let timeToSubtract = basePenalty * mult; 
-            for (let i = 0; i < count; i++) {
-                if (this.timerState.timeLeft > threshold) {
-                    let diff = this.timerState.timeLeft - timeToSubtract; 
-                    if (diff < threshold) diff = threshold; 
-                    addedTime -= (this.timerState.timeLeft - diff); this.timerState.timeLeft = diff;
-                }
+            
+            // ОПТИМИЗИРОВАНО: Убран цикл, который фризил сервер при больших комбо-подарках
+            let timeToSubtract = basePenalty * mult * count; 
+            if (this.timerState.timeLeft > threshold) {
+                let diff = this.timerState.timeLeft - timeToSubtract; 
+                if (diff < threshold) diff = threshold; 
+                addedTime -= (this.timerState.timeLeft - diff); 
+                this.timerState.timeLeft = diff;
             }
         } else if (this.timerState.settings.isSetTimeEnabled !== false && this.checkIds(this.timerState.settings.giftSetTimeIds, giftIdStr)) {
             eventType = 'set_time';
@@ -344,7 +358,8 @@ class UserSession {
         if (addedTime !== 0 || totalCoins > 0 || ['set_time', 'reset_time', 'set', 'reset', 'penalty', 'sub_threshold'].includes(eventType)) { 
             this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName, giftIcon, timeAdded: addedTime, type: eventType, amount: count, targetTime: this.timerState.timeLeft }); 
         }
-        this.broadcastTime();
+        
+        this.requestBroadcast(); // Оптимизировано
     }
 
     handleTikTokLike(data) {
@@ -378,7 +393,7 @@ class UserSession {
         }
 
         if (!this.timerState.settings.likesEnabled) {
-            this.broadcastTime();
+            this.requestBroadcast();
             return;
         }
         const limit = parseInt(this.timerState.settings.likeThreshold) || 100;
@@ -388,13 +403,23 @@ class UserSession {
         let triggers = Math.floor(this.timerState.userLikes[userId] / limit);
         if (triggers > 0) {
             this.timerState.userLikes[userId] -= triggers * limit;
-            for (let i = 0; i < triggers; i++) {
-                let amountToAdd = parseInt(this.timerState.settings.likeTime, 10);
-                let addedTime = this.addTime(amountToAdd, nickname, true);
-                this.broadcastAlert({ id: Date.now()+i, username: nickname, avatar, giftName: "ЛАЙКИ", timeAdded: addedTime, type: 'like', amount: limit, targetTime: this.timerState.timeLeft });
-            }
+            let amountToAdd = parseInt(this.timerState.settings.likeTime, 10);
+            
+            // ОПТИМИЗИРОВАНО: Убран цикл. Добавляем общее время разом и создаем один общий Alert.
+            let totalAddedTime = this.addTime(amountToAdd * triggers, nickname, true);
+            this.broadcastAlert({ 
+                id: Date.now(), 
+                username: nickname, 
+                avatar, 
+                giftName: "ЛАЙКИ", 
+                timeAdded: totalAddedTime, 
+                type: 'like', 
+                amount: triggers * limit, // Показываем сколько лайков пробило лимит
+                targetTime: this.timerState.timeLeft 
+            });
         }
-        this.broadcastTime();
+        
+        this.requestBroadcast(); // Оптимизировано
     }
 
     handleTikTokFollow(data) {
@@ -410,7 +435,8 @@ class UserSession {
             let amountToAdd = parseInt(this.timerState.settings.subTime, 10);
             let addedTime = this.addTime(amountToAdd, nickname, true);
             this.broadcastAlert({ id: Date.now(), username: nickname, avatar, giftName: "ПОДПИСКА", timeAdded: addedTime, type: 'follow', targetTime: this.timerState.timeLeft });
-            this.broadcastTime();
+            
+            this.requestBroadcast(); // Оптимизировано
         }
     }
 
@@ -610,7 +636,7 @@ io.on('connection', (socket) => {
         else if (winner.type === 'sub_time') { let old = session.timerState.timeLeft; let nTime = old - Math.abs(winner.value); if (old > 300 && nTime < 300) nTime = 300; session.timerState.timeLeft = nTime; addedTime = nTime - old; }
         
         session.broadcastAlert({ id: Date.now(), username: user.username, avatar: user.avatar, giftName: alertText, timeAdded: addedTime, type: eventType, isSpecial, targetTime: session.timerState.timeLeft });
-        session.broadcastTime();
+        session.broadcastTime(); // Это редкое событие, можно оставить прямую отправку
     });
 
     socket.on('roulette-animation-finished', () => { if(!userId) return; const s = getSession(userId); s.isRouletteBusy = false; setTimeout(()=>s.checkRouletteQueue(), 1000); });

@@ -370,7 +370,7 @@
                                     
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-cyan-500/30 transition">
                                         <div className="w-12 h-12 bg-cyan-500/10 flex items-center justify-center rounded-full border border-cyan-500/20 shrink-0"><i className="fa-brands fa-tiktok text-cyan-400 text-2xl"></i></div>
-                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isActive ? 'text-emerald-400' : 'text-slate-500'}`}>{status.tt.text}</span></div>
+                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isStreamLive ? 'text-emerald-400' : (status.tt.isActive ? 'text-amber-400' : 'text-slate-500')}`}>{status.tt.text}</span></div>
                                         <div className="flex-1 flex gap-2" style={{ fontFamily: 'Inter' }}>
                                             {!status.tt.isActive && <><input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /><input type="text" value={config.ttApiKey} onChange={e=>setConfig({...config, ttApiKey: e.target.value})} placeholder="API Key (tik.tools)" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /></>}
                                         </div>

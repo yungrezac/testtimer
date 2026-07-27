@@ -181,7 +181,7 @@ class UserSession {
         
         this.disconnectTikTok();
         this.manualTtDisconnect = false;
-        this.statusText.tt = { text: 'Подключение...', isActive: false, isStreamLive: false }; this.broadcastStatus();
+        this.statusText.tt = { text: 'Подключение к API...', isActive: false, isStreamLive: false }; this.broadcastStatus();
 
         try {
             const wsUrl = `wss://api.tik.tools?uniqueId=${encodeURIComponent(cleanUsername)}&apiKey=${encodeURIComponent(apiKey.trim())}`;
@@ -190,8 +190,10 @@ class UserSession {
 
             this.tiktokConnection.on('open', () => {
                 this.ttReconnectAttempts = 0;
-                this.statusText.tt = { text: 'Успешно подключено', isActive: true, isStreamLive: false }; this.broadcastStatus();
-                this.emit('play-success-sound', {});
+                // ИЗМЕНЕНИЕ: Подключились к API, но еще ждем события от стрима
+                this.statusText.tt = { text: 'Ожидание стрима...', isActive: true, isStreamLive: false }; 
+                this.broadcastStatus();
+                // Звук перенесен в on('message')
                 
                 this.ttPingInterval = setInterval(() => {
                     if (this.tiktokConnection && this.tiktokConnection.readyState === WebSocket.OPEN) {
@@ -207,9 +209,12 @@ class UserSession {
             this.tiktokConnection.on('message', (msg) => {
                 if (this.tiktokConnection) this.tiktokConnection.isAlive = true;
                 
+                // ИЗМЕНЕНИЕ: Первое полученное сообщение подтверждает, что стрим онлайн
                 if (!this.statusText.tt.isStreamLive) {
                     this.statusText.tt.isStreamLive = true;
+                    this.statusText.tt.text = 'Успешно подключено';
                     this.broadcastStatus();
+                    this.emit('play-success-sound', {}); // Играем звук только сейчас
                 }
 
                 try {

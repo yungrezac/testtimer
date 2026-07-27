@@ -42,7 +42,7 @@
             const [state, setState] = useState({ timeLeft: 0, currentTotalLikes: 0, likesRouletteThreshold: 100000, likesRouletteEnabled: false }); 
             const [history, setHistory] = useState([]);
             const [customSeconds, setCustomSeconds] = useState(60);
-            const [status, setStatus] = useState({ tt: { text: 'Ожидание', isActive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' });
+            const [status, setStatus] = useState({ tt: { text: 'Ожидание', isActive: false, isStreamLive: false }, da: 'Ожидание', dp: 'Ожидание', dx: 'Ожидание' });
             const [error, setError] = useState(null);
 
             useEffect(() => { 
@@ -100,7 +100,7 @@
                         {/* Статусы подключений */}
                         <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 grid grid-cols-2 gap-3">
                             <div className="flex items-center gap-2">
-                                <div className={`w-2.5 h-2.5 rounded-full ${status.tt.isActive ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500'}`}></div>
+                                <div className={`w-2.5 h-2.5 rounded-full ${status.tt.isStreamLive ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : (status.tt.isActive ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' : 'bg-rose-500')}`}></div>
                                 <span className="text-sm font-bold text-slate-300">TikTok: <span className="text-xs text-slate-500 font-normal">{status.tt.text}</span></span>
                             </div>
                             <div className="flex items-center gap-2">

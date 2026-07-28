@@ -198,11 +198,54 @@ class UserSession {
         this.broadcastStatus();
 
         try {
-            // Динамический импорт piratetok-live-js (решает проблему с EulerStream)
-            // Эта библиотека подключается напрямую по WebSockets без API-ключей.
+            // Динамический импорт piratetok-live-js
             const { TikTokLiveClient, EventType } = await import('piratetok-live-js');
 
-            this.tiktokConnection = new TikTokLiveClient(cleanUsername);
+            // 1. Ручной перехват ttwid cookie с жесткой маскировкой под обычный браузер
+            let customCookie = '';
+            try {
+                const fetchRes = await fetch('https://www.tiktok.com/explore', {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+                        'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+                        'Sec-Ch-Ua-Mobile': '?0',
+                        'Sec-Ch-Ua-Platform': '"Windows"',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none'
+                    }
+                });
+                
+                const setCookieHeader = fetchRes.headers.get('set-cookie');
+                if (setCookieHeader && setCookieHeader.includes('ttwid=')) {
+                    const ttwid = setCookieHeader.split('ttwid=')[1].split(';')[0];
+                    customCookie = `ttwid=${ttwid};`;
+                    console.log(`[TikTok - ${this.userId}] ttwid успешно сгенерирован вручную.`);
+                } else {
+                    console.log(`[TikTok - ${this.userId}] Сервер TikTok не выдал ttwid, полагаемся на коннектор.`);
+                }
+            } catch (err) {
+                console.log(`[TikTok - ${this.userId}] Ошибка ручного запроса ttwid:`, err.message);
+            }
+
+            // 2. Инициализация клиента с подмененными заголовками для обхода WAF
+            const clientOptions = {
+                // Передаем заголовки в разных форматах для поддержки внутренней структуры коннектора
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Cookie': customCookie
+                },
+                requestOptions: {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                        'Cookie': customCookie
+                    }
+                }
+            };
+
+            this.tiktokConnection = new TikTokLiveClient(cleanUsername, clientOptions);
 
             this.tiktokConnection.connect().then(() => {
                 console.info(`[TikTok - ${this.userId}] Стрим перехвачен`);

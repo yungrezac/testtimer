@@ -40,13 +40,15 @@ class UserSession {
         
         this.alertHistory = [];
         
-        this.tiktokConnection = null;
+        // Подключения TikTok (через EulerStream API)
+        this.eulerWs = null;
         this.reconnectTimeout = null;
         this.ttReconnectAttempts = 0;
         this.currentStreamTotalLikes = 0;
         this.lastProcessedLikesMilestone = null;
         this.manualTtDisconnect = false;
         
+        // Подключения сторонних донатов
         this.daWs = null;
         this.dpInterval = null;
         this.dxInterval = null;
@@ -111,6 +113,10 @@ class UserSession {
         let timeChange = parseInt(amount, 10);
         if (isNaN(timeChange)) timeChange = 0;
 
+        // Конвертация монет в секунды (согласно настройкам, по умолчанию 1 монета = 1 сек)
+        const timePerCoin = this.timerState.settings.timePerCoin || 1;
+        timeChange = Math.floor(timeChange * timePerCoin);
+
         if (this.multiplierState.isActive && !ignoreMultiplier) {
             if (this.multiplierState.type === 'buff') timeChange = timeChange > 0 ? timeChange * this.multiplierState.value : timeChange;
             else if (this.multiplierState.type === 'debuff') timeChange = -Math.abs(timeChange * this.multiplierState.value);
@@ -163,22 +169,17 @@ class UserSession {
     }
 
     disconnectTikTok(customText = 'Отключено') {
-        console.log(`[TikTok - ${this.userId}] Отключение: ${customText}`);
+        console.log(`[EulerStream - ${this.userId}] Отключение: ${customText}`);
         this.manualTtDisconnect = true;
         
-        if (this.reconnectTimeout) { 
-            clearTimeout(this.reconnectTimeout); 
-            this.reconnectTimeout = null; 
-        }
+        if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
         
-        if (this.tiktokConnection) { 
+        if (this.eulerWs) { 
             try { 
-                if (typeof this.tiktokConnection.removeAllListeners === 'function') {
-                    this.tiktokConnection.removeAllListeners();
-                }
-                this.tiktokConnection.disconnect(); 
+                this.eulerWs.removeAllListeners();
+                this.eulerWs.close(); 
             } catch(e) {} 
-            this.tiktokConnection = null; 
+            this.eulerWs = null; 
         }
         
         this.currentStreamTotalLikes = 0;
@@ -189,117 +190,86 @@ class UserSession {
         this.broadcastStatus();
     }
 
-    async connectTikTok(username, customSessionId = null) {
-        if (!username) return;
+    connectTikTok(username, eulerApiKey) {
+        if (!username || !eulerApiKey) {
+            this.statusText.tt = { text: 'Ошибка: Нужен Username и API Ключ EulerStream', isActive: false, isStreamLive: false };
+            this.broadcastStatus();
+            return;
+        }
         
         const cleanUsername = username.replace(/[@\s]/g, '');
-        console.log(`[TikTok - ${this.userId}] Инициализация подключения для @${cleanUsername}...`);
+        console.log(`[EulerStream - ${this.userId}] Подключение к @${cleanUsername}...`);
         
-        this.disconnectTikTok(); 
-        this.manualTtDisconnect = false; 
-        this.statusText.tt = { text: 'Подключение к серверу...', isActive: true, isStreamLive: false }; 
+        this.disconnectTikTok();
+        this.manualTtDisconnect = false;
+        this.statusText.tt = { text: 'Подключение к EulerStream...', isActive: true, isStreamLive: false }; 
         this.broadcastStatus();
 
         try {
-            const { TikTokLiveClient } = await import('piratetok-live-js');
+            // Официальный Endpoint EulerStream (или совместимых сервисов)
+            const wsUrl = `wss://io.eulerstream.com/?user=${encodeURIComponent(cleanUsername)}&key=${encodeURIComponent(eulerApiKey)}`;
+            
+            this.eulerWs = new WebSocket(wsUrl);
 
-            let customCookie = '';
-            if (customSessionId && customSessionId.trim() !== '') {
-                let cleanSessionId = customSessionId.trim();
-                if (cleanSessionId.includes('sessionid=')) {
-                    cleanSessionId = cleanSessionId.split('sessionid=')[1].split(';')[0];
-                }
-                customCookie = `sessionid=${cleanSessionId};`;
-                console.log(`[TikTok - ${this.userId}] Используется токен sessionid из интерфейса.`);
-            } else {
-                console.log(`[TikTok - ${this.userId}] Внимание: sessionid не указан, подключение может быть нестабильным.`);
-            }
-
-            const clientOptions = {
-                processInitialData: false,
-                enableExtendedGiftInfo: true,
-                requestOptions: {
-                    timeout: 10000,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                        ...(customCookie ? { 'Cookie': customCookie } : {})
-                    }
-                }
-            };
-
-            const client = new TikTokLiveClient(cleanUsername, clientOptions);
-            this.tiktokConnection = client;
-
-            const connectPromise = client.connect();
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Таймаут (нет ответа 15 сек)')), 15000));
-
-            Promise.race([connectPromise, timeoutPromise]).then(state => {
-                if (this.tiktokConnection !== client) return; // Защита от гонки
-                console.info(`[TikTok - ${this.userId}] Стрим перехвачен успешно`);
+            this.eulerWs.on('open', () => {
+                console.info(`[EulerStream - ${this.userId}] Успешное соединение с сервером!`);
                 this.ttReconnectAttempts = 0;
-                this.statusText.tt = { text: 'Стрим перехвачен (Успешно)', isActive: true, isStreamLive: true }; 
+                this.statusText.tt = { text: 'Подключено (Ожидание стрима)', isActive: true, isStreamLive: false }; 
                 this.broadcastStatus();
-                this.emit('play-success-sound', {});
-            }).catch(err => {
-                if (this.tiktokConnection !== client) return; // Защита от гонки
-                console.error(`[TikTok - ${this.userId}] Ошибка подключения:`, err.message);
-                this.statusText.tt = { text: `Ошибка: ${err.message}`, isActive: false, isStreamLive: false }; 
-                this.broadcastStatus();
-                
-                if (this.tiktokConnection === client) {
-                    try { 
-                        if (typeof client.removeAllListeners === 'function') client.removeAllListeners();
-                        client.disconnect(); 
-                    } catch(e) {}
-                    this.tiktokConnection = null;
+            });
+
+            this.eulerWs.on('message', (data) => {
+                try {
+                    const message = JSON.parse(data);
+                    
+                    // Обработка системных сообщений от EulerStream
+                    if (message.type === 'connected') {
+                        this.statusText.tt = { text: 'Стрим в сети (Успешно)', isActive: true, isStreamLive: true }; 
+                        this.broadcastStatus();
+                        this.emit('play-success-sound', {});
+                    }
+                    if (message.type === 'disconnected') {
+                        this.statusText.tt = { text: 'Стрим оффлайн', isActive: true, isStreamLive: false }; 
+                        this.broadcastStatus();
+                    }
+                    if (message.type === 'error') {
+                        console.error(`[EulerStream - ${this.userId}] Ошибка от API:`, message.message);
+                        this.statusText.tt = { text: `Ошибка: ${message.message}`, isActive: false, isStreamLive: false };
+                        this.broadcastStatus();
+                    }
+
+                    // Обработка пользовательских событий
+                    const eventName = message.event || message.type;
+                    const payload = message.data || message;
+
+                    if (eventName === 'gift') this.handleTikTokGift(payload);
+                    if (eventName === 'like') this.handleTikTokLike(payload);
+                    if (eventName === 'social' || eventName === 'follow') this.handleTikTokFollow(payload);
+
+                } catch (err) {
+                    console.error(`[EulerStream - ${this.userId}] Ошибка парсинга JSON:`, err.message);
                 }
             });
 
-            client.on('gift', data => {
-                if (this.tiktokConnection !== client) return;
-                this.handleTikTokGift(data);
+            this.eulerWs.on('error', err => {
+                console.error(`[EulerStream - ${this.userId}] Ошибка сокета:`, err.message);
             });
 
-            client.on('like', data => {
-                if (this.tiktokConnection !== client) return;
-                this.handleTikTokLike(data);
-            });
-
-            client.on('follow', data => {
-                if (this.tiktokConnection !== client) return;
-                this.handleTikTokFollow(data);
-            });
-
-            client.on('streamEnd', () => {
-                if (this.tiktokConnection !== client) return;
-                console.log(`[TikTok - ${this.userId}] Стрим @${cleanUsername} завершен.`);
-                this.disconnectTikTok('Стрим завершен');
-            });
-
-            client.on('error', err => {
-                if (this.tiktokConnection !== client) return;
-                console.error(`[TikTok - ${this.userId}] Ошибка коннектора:`, err.message);
-            });
-
-            client.on('disconnected', () => {
-                // ВАЖНО: Игнорируем событие, если оно пришло от старого (убитого) клиента!
-                // Это решает проблему бесконечного цикла переподключений.
-                if (this.tiktokConnection !== client) return;
-                
+            this.eulerWs.on('close', (code, reason) => {
                 if (this.manualTtDisconnect) return;
                 
-                console.log(`[TikTok - ${this.userId}] Соединение разорвано. Переподключение...`);
+                console.log(`[EulerStream - ${this.userId}] Соединение разорвано. Переподключение... (Код: ${code})`);
                 this.statusText.tt = { text: 'Переподключение...', isActive: false, isStreamLive: false }; 
                 this.broadcastStatus();
                 this.ttReconnectAttempts++;
                 
-                let delay = this.ttReconnectAttempts >= 3 ? 120000 : (this.ttReconnectAttempts === 2 ? 30000 : 10000);
-                this.reconnectTimeout = setTimeout(() => this.connectTikTok(cleanUsername, customSessionId), delay);
+                let delay = this.ttReconnectAttempts >= 3 ? 15000 : 5000;
+                this.reconnectTimeout = setTimeout(() => this.connectTikTok(cleanUsername, eulerApiKey), delay);
             });
 
         } catch (err) { 
-            console.error(`[TikTok - ${this.userId}] Критическая ошибка подключения:`, err.message);
-            this.statusText.tt = { text: `Ошибка системы: ${err.message}`, isActive: false, isStreamLive: false };
+            console.error(`[EulerStream - ${this.userId}] Критическая ошибка:`, err.message);
+            this.statusText.tt = { text: `Критическая ошибка: ${err.message}`, isActive: false, isStreamLive: false };
             this.broadcastStatus();
             this.disconnectTikTok(); 
         }
@@ -307,17 +277,20 @@ class UserSession {
 
     handleTikTokGift(data) {
         if (this.timerState.isVictory || this.timerState.isRollingBonus) return;
+        
+        // Поддержка структур данных как EulerStream так и старого коннектора
         const isEnd = data.repeatEnd !== undefined ? data.repeatEnd : true;
         if (data.giftType === 1 && !isEnd) return;
 
-        const giftIdStr = String(data.gift?.id || data.giftId || '');
-        const count = data.repeatCount || data.combo || 1;
-        const diamonds = data.gift?.diamondCount || data.gift?.diamonds || data.diamondCount || 0;
+        const giftIdStr = String(data.giftId || data.gift?.id || '');
+        const count = data.repeatCount || data.combo || data.amount || 1;
+        const diamonds = data.diamondCount || data.gift?.diamonds || data.cost || 0;
         const totalCoins = diamonds * count;
-        const nickname = data.user?.nickname || data.nickname || 'Зритель';
-        const avatar = data.user?.profilePictureUrl || data.user?.avatarUrl || data.profilePictureUrl || 'https://via.placeholder.com/48';
-        const giftName = data.gift?.name || data.giftName || 'Подарок';
-        const giftIcon = data.gift?.icon?.urlList?.[0] || data.giftPictureUrl || data.gift?.icon || '';
+        
+        const nickname = data.nickname || data.user?.nickname || 'Зритель';
+        const avatar = data.profilePictureUrl || data.user?.avatarUrl || data.user?.avatar || 'https://via.placeholder.com/48';
+        const giftName = data.giftName || data.gift?.name || 'Подарок';
+        const giftIcon = data.giftPictureUrl || data.gift?.icon || data.gift?.image || '';
 
         this.emit('check-and-save-gift', { gift_id: giftIdStr, name: giftName, icon: giftIcon, cost: diamonds });
 
@@ -402,9 +375,9 @@ class UserSession {
     handleTikTokLike(data) {
         if (this.timerState.isVictory || this.timerState.isRollingBonus) return;
         const batchLikes = parseInt(data.likeCount || data.count || 1, 10);
-        const apiTotalLikes = parseInt(data.totalLikes || data.total || 0, 10);
-        const nickname = data.user?.nickname || data.nickname || 'Зритель';
-        const avatar = data.user?.profilePictureUrl || data.user?.avatarUrl || data.profilePictureUrl || 'https://via.placeholder.com/48';
+        const apiTotalLikes = parseInt(data.totalLikes || data.totalLikeCount, 10);
+        const nickname = data.nickname || data.user?.nickname || 'Зритель';
+        const avatar = data.profilePictureUrl || data.user?.avatarUrl || data.user?.avatar || 'https://via.placeholder.com/48';
         
         if (!isNaN(apiTotalLikes) && apiTotalLikes > this.currentStreamTotalLikes) this.currentStreamTotalLikes = apiTotalLikes;
         else this.currentStreamTotalLikes += batchLikes;
@@ -434,7 +407,7 @@ class UserSession {
             return;
         }
         const limit = parseInt(this.timerState.settings.likeThreshold) || 100;
-        const userId = String(data.user?.uniqueId || data.uniqueId || Math.random());
+        const userId = data.uniqueId || data.user?.uniqueId || String(Math.random());
         this.timerState.userLikes[userId] = (this.timerState.userLikes[userId] || 0) + batchLikes;
 
         let triggers = Math.floor(this.timerState.userLikes[userId] / limit);
@@ -451,10 +424,11 @@ class UserSession {
 
     handleTikTokFollow(data) {
         if (this.timerState.isVictory || this.timerState.isRollingBonus || !this.timerState.settings.subsEnabled) return;
+        if (data.action && data.action !== 'follow' && data.action !== 'subscribe') return;
         
-        const nickname = data.user?.nickname || data.nickname || 'Зритель';
-        const avatar = data.user?.profilePictureUrl || data.user?.avatarUrl || data.profilePictureUrl || 'https://via.placeholder.com/48';
-        const userId = String(data.user?.uniqueId || data.uniqueId || Math.random());
+        const nickname = data.nickname || data.user?.nickname || 'Зритель';
+        const avatar = data.profilePictureUrl || data.user?.avatarUrl || data.user?.avatar || 'https://via.placeholder.com/48';
+        const userId = data.uniqueId || data.user?.uniqueId || String(Math.random());
         
         if (!this.timerState.subbedUsers.has(userId)) {
             this.timerState.subbedUsers.add(userId);
@@ -525,12 +499,8 @@ class UserSession {
     }
 
     disconnectDa() {
-        console.log(`[DA - ${this.userId}] Отключение.`);
         if (this.daWs) { 
-            try {
-                this.daWs.removeAllListeners();
-                this.daWs.terminate();
-            } catch(e) {}
+            try { this.daWs.removeAllListeners(); this.daWs.terminate(); } catch(e) {}
             this.daWs = null; 
         }
         this.statusText.da = 'Отключено'; this.broadcastStatus();
@@ -540,7 +510,6 @@ class UserSession {
         if (!apiKey) return;
         this.disconnectDp();
         console.log(`[DP - ${this.userId}] Подключение DonatePay...`);
-        
         this.statusText.dp = 'Подключение...'; this.broadcastStatus();
         try {
             const res = await fetch('https://donatepay.ru/api/v1/transactions', {
@@ -576,7 +545,6 @@ class UserSession {
     }
 
     disconnectDp() {
-        console.log(`[DP - ${this.userId}] Отключение.`);
         if (this.dpInterval) { clearInterval(this.dpInterval); this.dpInterval = null; }
         this.statusText.dp = 'Отключено'; this.broadcastStatus();
     }
@@ -584,8 +552,7 @@ class UserSession {
     async connectDx(token) {
         if (!token) return;
         this.disconnectDx();
-        console.log(`[DX - ${this.userId}] Подключение DonateX.gg...`);
-        
+        console.log(`[DX - ${this.userId}] Подключение DonateX...`);
         this.statusText.dx = 'Подключение...'; this.broadcastStatus();
         try {
             const res = await fetch(`https://donatex.gg/api/v1/donations?skip=0&take=1`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -617,7 +584,6 @@ class UserSession {
     }
 
     disconnectDx() {
-        console.log(`[DX - ${this.userId}] Отключение.`);
         if (this.dxInterval) { clearInterval(this.dxInterval); this.dxInterval = null; }
         this.statusText.dx = 'Отключено'; this.broadcastStatus();
     }
@@ -668,9 +634,9 @@ io.on('connection', (socket) => {
         s.timerState.timeLeft += sec; if(s.timerState.timeLeft > 0) s.timerState.isVictory = false; 
         s.broadcastTime(); 
     });
+    
     socket.on('manual-sub', (sec) => { 
         if (!userId) return; const s = getSession(userId); 
-        let old = s.timerState.timeLeft;
         s.timerState.timeLeft = Math.max(0, s.timerState.timeLeft - sec); 
         if(s.timerState.timeLeft === 0) { s.timerState.isVictory = true; s.timerState.isRunning = false; } 
         s.broadcastTime(); 
@@ -709,8 +675,9 @@ io.on('connection', (socket) => {
     socket.on('roulette-animation-finished', () => { if(!userId) return; const s = getSession(userId); s.isRouletteBusy = false; setTimeout(()=>s.checkRouletteQueue(), 1000); });
     socket.on('bonus-roll-finished', (time) => { if(!userId) return; const s = getSession(userId); s.timerState.timeLeft = time; s.timerState.isRollingBonus = false; s.timerState.isRunning = true; s.broadcastTime(); });
 
-    socket.on('connect-tiktok', (d) => { if(userId) getSession(userId).connectTikTok(d.username, d.sessionId); });
+    socket.on('connect-tiktok', (d) => { if(userId) getSession(userId).connectTikTok(d.username, d.eulerApiKey); });
     socket.on('disconnect-tiktok', () => { if(userId) getSession(userId).disconnectTikTok(); });
+    
     socket.on('connect-da-token', (token) => { if(userId) getSession(userId).connectDaToken(token); });
     socket.on('disconnect-da', () => { if(userId) getSession(userId).disconnectDa(); });
     socket.on('connect-dp', (apiKey) => { if(userId) getSession(userId).connectDp(apiKey); });

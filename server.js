@@ -186,7 +186,7 @@ class UserSession {
         this.broadcastStatus();
     }
 
-    async connectTikTok(username) {
+    async connectTikTok(username, customSessionId = null) {
         if (!username) return;
         
         const cleanUsername = username.replace(/[@\s]/g, '');
@@ -202,61 +202,68 @@ class UserSession {
             const { TikTokLiveClient, EventType } = await import('piratetok-live-js');
 
             let customCookie = '';
-            console.log(`[TikTok - ${this.userId}] Запуск продвинутого анти-бот обхода для получения ttwid...`);
             
-            const fetchStrategies = [
-                // 1. Прямой запрос к API генерации гостевого токена (без HTML и CloudFlare-капчи)
-                async () => {
-                    return await fetch('https://www.tiktok.com/passport/web/guest/ttwid/', {
-                        method: 'POST',
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                            'Content-Type': 'application/json',
-                            'Origin': 'https://www.tiktok.com',
-                            'Referer': 'https://www.tiktok.com/'
-                        },
-                        body: JSON.stringify({ "app_id": 1988, "region": "us" })
-                    });
-                },
-                // 2. Имитация мобильного устройства (Мобильные API реже блокируют)
-                async () => {
-                    return await fetch('https://m.tiktok.com/node/share/discover', {
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
-                            'Accept': 'application/json'
-                        }
-                    });
-                },
-                // 3. Запрос на главную страницу с имитацией перехода из Google
-                async () => {
-                    return await fetch(`https://www.tiktok.com/`, {
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                            'Referer': 'https://www.google.com/'
-                        }
-                    });
-                }
-            ];
-
-            for (let i = 0; i < fetchStrategies.length; i++) {
-                try {
-                    const fetchRes = await fetchStrategies[i]();
-                    const setCookieHeader = fetchRes.headers.get('set-cookie');
-                    
-                    if (setCookieHeader && setCookieHeader.includes('ttwid=')) {
-                        const ttwid = setCookieHeader.split('ttwid=')[1].split(';')[0];
-                        customCookie = `ttwid=${ttwid};`;
-                        console.log(`[TikTok - ${this.userId}] ttwid успешно получен (Стратегия ${i+1})`);
-                        break;
+            // Если пользователь ввел токен вручную в интерфейсе
+            if (customSessionId && customSessionId.trim() !== '') {
+                customCookie = customSessionId.includes('ttwid=') ? customSessionId.trim() : `ttwid=${customSessionId.trim()};`;
+                console.log(`[TikTok - ${this.userId}] Используется ручной токен ttwid из интерфейса.`);
+            } else {
+                console.log(`[TikTok - ${this.userId}] Запуск продвинутого анти-бот обхода для получения ttwid...`);
+                
+                const fetchStrategies = [
+                    // 1. Прямой запрос к API генерации гостевого токена (без HTML и CloudFlare-капчи)
+                    async () => {
+                        return await fetch('https://www.tiktok.com/passport/web/guest/ttwid/', {
+                            method: 'POST',
+                            headers: {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                                'Content-Type': 'application/json',
+                                'Origin': 'https://www.tiktok.com',
+                                'Referer': 'https://www.tiktok.com/'
+                            },
+                            body: JSON.stringify({ "app_id": 1988, "region": "us" })
+                        });
+                    },
+                    // 2. Имитация мобильного устройства (Мобильные API реже блокируют)
+                    async () => {
+                        return await fetch('https://m.tiktok.com/node/share/discover', {
+                            headers: {
+                                'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+                                'Accept': 'application/json'
+                            }
+                        });
+                    },
+                    // 3. Запрос на главную страницу с имитацией перехода из Google
+                    async () => {
+                        return await fetch(`https://www.tiktok.com/`, {
+                            headers: {
+                                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                                'Referer': 'https://www.google.com/'
+                            }
+                        });
                     }
-                } catch (err) {
-                    console.log(`[TikTok - ${this.userId}] Стратегия ${i+1} не удалась, пробуем следующую...`);
-                }
-            }
+                ];
 
-            if (!customCookie) {
-                console.warn(`[TikTok - ${this.userId}] Все стратегии получения ttwid не удались. Передаем управление коннектору.`);
+                for (let i = 0; i < fetchStrategies.length; i++) {
+                    try {
+                        const fetchRes = await fetchStrategies[i]();
+                        const setCookieHeader = fetchRes.headers.get('set-cookie');
+                        
+                        if (setCookieHeader && setCookieHeader.includes('ttwid=')) {
+                            const ttwid = setCookieHeader.split('ttwid=')[1].split(';')[0];
+                            customCookie = `ttwid=${ttwid};`;
+                            console.log(`[TikTok - ${this.userId}] ttwid успешно получен (Стратегия ${i+1})`);
+                            break;
+                        }
+                    } catch (err) {
+                        console.log(`[TikTok - ${this.userId}] Стратегия ${i+1} не удалась, пробуем следующую...`);
+                    }
+                }
+
+                if (!customCookie) {
+                    console.warn(`[TikTok - ${this.userId}] Все стратегии получения ttwid не удались. Передаем управление коннектору.`);
+                }
             }
 
             const clientOptions = {
@@ -290,16 +297,16 @@ class UserSession {
                 this.broadcastStatus();
             });
 
-            // Используем EventType, который предоставляет новая библиотека (или fallbacks на строки)
-            this.tiktokConnection.on(EventType ? EventType.GIFT : 'gift', data => {
+            // Используем жестко заданные строки событий, чтобы избежать багов с EventType
+            this.tiktokConnection.on('gift', data => {
                 this.handleTikTokGift(data);
             });
 
-            this.tiktokConnection.on(EventType ? EventType.LIKE : 'like', data => {
+            this.tiktokConnection.on('like', data => {
                 this.handleTikTokLike(data);
             });
 
-            this.tiktokConnection.on(EventType ? EventType.FOLLOW : 'follow', data => {
+            this.tiktokConnection.on('follow', data => {
                 this.handleTikTokFollow(data);
             });
 
@@ -321,7 +328,7 @@ class UserSession {
                 this.ttReconnectAttempts++;
                 
                 let delay = this.ttReconnectAttempts >= 3 ? 120000 : (this.ttReconnectAttempts === 2 ? 30000 : 10000);
-                this.reconnectTimeout = setTimeout(() => this.connectTikTok(cleanUsername), delay);
+                this.reconnectTimeout = setTimeout(() => this.connectTikTok(cleanUsername, customSessionId), delay);
             });
 
         } catch (err) { 
@@ -737,7 +744,7 @@ io.on('connection', (socket) => {
     socket.on('roulette-animation-finished', () => { if(!userId) return; const s = getSession(userId); s.isRouletteBusy = false; setTimeout(()=>s.checkRouletteQueue(), 1000); });
     socket.on('bonus-roll-finished', (time) => { if(!userId) return; const s = getSession(userId); s.timerState.timeLeft = time; s.timerState.isRollingBonus = false; s.timerState.isRunning = true; s.broadcastTime(); });
 
-    socket.on('connect-tiktok', (d) => { if(userId) getSession(userId).connectTikTok(d.username); });
+    socket.on('connect-tiktok', (d) => { if(userId) getSession(userId).connectTikTok(d.username, d.sessionId); });
     socket.on('disconnect-tiktok', () => { if(userId) getSession(userId).disconnectTikTok(); });
     socket.on('connect-da-token', (token) => { if(userId) getSession(userId).connectDaToken(token); });
     socket.on('disconnect-da', () => { if(userId) getSession(userId).disconnectDa(); });

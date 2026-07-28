@@ -38,10 +38,8 @@ class UserSession {
         this.rouletteQueue = [];
         this.isRouletteBusy = false;
         
-        // История событий для стабильности пульта
         this.alertHistory = [];
         
-        // Подключения TikTok
         this.tiktokConnection = null;
         this.reconnectTimeout = null;
         this.ttReconnectAttempts = 0;
@@ -49,7 +47,6 @@ class UserSession {
         this.lastProcessedLikesMilestone = null;
         this.manualTtDisconnect = false;
         
-        // Подключения DA, DP, DX
         this.daWs = null;
         this.dpInterval = null;
         this.dxInterval = null;
@@ -169,10 +166,16 @@ class UserSession {
         console.log(`[TikTok - ${this.userId}] Отключение: ${customText}`);
         this.manualTtDisconnect = true;
         
-        if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
+        if (this.reconnectTimeout) { 
+            clearTimeout(this.reconnectTimeout); 
+            this.reconnectTimeout = null; 
+        }
         
         if (this.tiktokConnection) { 
             try { 
+                if (typeof this.tiktokConnection.removeAllListeners === 'function') {
+                    this.tiktokConnection.removeAllListeners();
+                }
                 this.tiktokConnection.disconnect(); 
             } catch(e) {} 
             this.tiktokConnection = null; 
@@ -192,90 +195,24 @@ class UserSession {
         const cleanUsername = username.replace(/[@\s]/g, '');
         console.log(`[TikTok - ${this.userId}] Инициализация подключения для @${cleanUsername}...`);
         
-        this.disconnectTikTok();
-        this.manualTtDisconnect = false;
+        this.disconnectTikTok(); 
+        this.manualTtDisconnect = false; 
         this.statusText.tt = { text: 'Подключение к серверу...', isActive: true, isStreamLive: false }; 
         this.broadcastStatus();
 
         try {
-            // Импортируем ПРАВИЛЬНЫЕ классы из новой библиотеки
-            const { TikTokLiveClient, EventType } = await import('piratetok-live-js');
+            const { TikTokLiveClient } = await import('piratetok-live-js');
 
             let customCookie = '';
-            
-            // Если пользователь ввел токен вручную в интерфейсе
             if (customSessionId && customSessionId.trim() !== '') {
-                // Поддержка и простого значения, и строки "sessionid=..."
                 let cleanSessionId = customSessionId.trim();
                 if (cleanSessionId.includes('sessionid=')) {
                     cleanSessionId = cleanSessionId.split('sessionid=')[1].split(';')[0];
-                } else if (cleanSessionId.includes('ttwid=')) {
-                    // На случай, если по привычке вставили ttwid
-                    cleanSessionId = cleanSessionId.split('ttwid=')[1].split(';')[0];
-                    customCookie = `ttwid=${cleanSessionId};`;
                 }
-                
-                if (!customCookie) {
-                    customCookie = `sessionid=${cleanSessionId};`;
-                    console.log(`[TikTok - ${this.userId}] Используется ручной токен sessionid из интерфейса.`);
-                }
+                customCookie = `sessionid=${cleanSessionId};`;
+                console.log(`[TikTok - ${this.userId}] Используется токен sessionid из интерфейса.`);
             } else {
-                console.log(`[TikTok - ${this.userId}] Запуск продвинутого анти-бот обхода для получения ttwid...`);
-                
-                const fetchStrategies = [
-                    // 1. Прямой запрос к API генерации гостевого токена (без HTML и CloudFlare-капчи)
-                    async () => {
-                        return await fetch('https://www.tiktok.com/passport/web/guest/ttwid/', {
-                            method: 'POST',
-                            headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                                'Content-Type': 'application/json',
-                                'Origin': 'https://www.tiktok.com',
-                                'Referer': 'https://www.tiktok.com/'
-                            },
-                            body: JSON.stringify({ "app_id": 1988, "region": "us" })
-                        });
-                    },
-                    // 2. Имитация мобильного устройства (Мобильные API реже блокируют)
-                    async () => {
-                        return await fetch('https://m.tiktok.com/node/share/discover', {
-                            headers: {
-                                'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
-                                'Accept': 'application/json'
-                            }
-                        });
-                    },
-                    // 3. Запрос на главную страницу с имитацией перехода из Google
-                    async () => {
-                        return await fetch(`https://www.tiktok.com/`, {
-                            headers: {
-                                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-                                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                                'Referer': 'https://www.google.com/'
-                            }
-                        });
-                    }
-                ];
-
-                for (let i = 0; i < fetchStrategies.length; i++) {
-                    try {
-                        const fetchRes = await fetchStrategies[i]();
-                        const setCookieHeader = fetchRes.headers.get('set-cookie');
-                        
-                        if (setCookieHeader && setCookieHeader.includes('ttwid=')) {
-                            const ttwid = setCookieHeader.split('ttwid=')[1].split(';')[0];
-                            customCookie = `ttwid=${ttwid};`;
-                            console.log(`[TikTok - ${this.userId}] ttwid успешно получен (Стратегия ${i+1})`);
-                            break;
-                        }
-                    } catch (err) {
-                        console.log(`[TikTok - ${this.userId}] Стратегия ${i+1} не удалась, пробуем следующую...`);
-                    }
-                }
-
-                if (!customCookie) {
-                    console.warn(`[TikTok - ${this.userId}] Все стратегии получения ttwid не удались. Передаем управление коннектору.`);
-                }
+                console.log(`[TikTok - ${this.userId}] Внимание: sessionid не указан, подключение может быть нестабильным.`);
             }
 
             const clientOptions = {
@@ -290,48 +227,65 @@ class UserSession {
                 }
             };
 
-            // ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ КЛАСС: TikTokLiveClient вместо старого
-            this.tiktokConnection = new TikTokLiveClient(cleanUsername, clientOptions);
+            const client = new TikTokLiveClient(cleanUsername, clientOptions);
+            this.tiktokConnection = client;
 
-            // Обертка с тайм-аутом (предотвращает бесконечное зависание статуса "Подключение...")
-            const connectPromise = this.tiktokConnection.connect();
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Таймаут подключения (TikTok не ответил за 15 сек)')), 15000));
+            const connectPromise = client.connect();
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Таймаут (нет ответа 15 сек)')), 15000));
 
             Promise.race([connectPromise, timeoutPromise]).then(state => {
-                console.info(`[TikTok - ${this.userId}] Стрим перехвачен`);
+                if (this.tiktokConnection !== client) return; // Защита от гонки
+                console.info(`[TikTok - ${this.userId}] Стрим перехвачен успешно`);
                 this.ttReconnectAttempts = 0;
                 this.statusText.tt = { text: 'Стрим перехвачен (Успешно)', isActive: true, isStreamLive: true }; 
                 this.broadcastStatus();
                 this.emit('play-success-sound', {});
             }).catch(err => {
+                if (this.tiktokConnection !== client) return; // Защита от гонки
                 console.error(`[TikTok - ${this.userId}] Ошибка подключения:`, err.message);
                 this.statusText.tt = { text: `Ошибка: ${err.message}`, isActive: false, isStreamLive: false }; 
                 this.broadcastStatus();
+                
+                if (this.tiktokConnection === client) {
+                    try { 
+                        if (typeof client.removeAllListeners === 'function') client.removeAllListeners();
+                        client.disconnect(); 
+                    } catch(e) {}
+                    this.tiktokConnection = null;
+                }
             });
 
-            // Используем жестко заданные строки событий, чтобы избежать багов с EventType
-            this.tiktokConnection.on('gift', data => {
+            client.on('gift', data => {
+                if (this.tiktokConnection !== client) return;
                 this.handleTikTokGift(data);
             });
 
-            this.tiktokConnection.on('like', data => {
+            client.on('like', data => {
+                if (this.tiktokConnection !== client) return;
                 this.handleTikTokLike(data);
             });
 
-            this.tiktokConnection.on('follow', data => {
+            client.on('follow', data => {
+                if (this.tiktokConnection !== client) return;
                 this.handleTikTokFollow(data);
             });
 
-            this.tiktokConnection.on('streamEnd', () => {
-                console.log(`[TikTok - ${this.userId}] Получен ивент завершения стрима @${cleanUsername}.`);
+            client.on('streamEnd', () => {
+                if (this.tiktokConnection !== client) return;
+                console.log(`[TikTok - ${this.userId}] Стрим @${cleanUsername} завершен.`);
                 this.disconnectTikTok('Стрим завершен');
             });
 
-            this.tiktokConnection.on('error', err => {
+            client.on('error', err => {
+                if (this.tiktokConnection !== client) return;
                 console.error(`[TikTok - ${this.userId}] Ошибка коннектора:`, err.message);
             });
 
-            this.tiktokConnection.on('disconnected', () => {
+            client.on('disconnected', () => {
+                // ВАЖНО: Игнорируем событие, если оно пришло от старого (убитого) клиента!
+                // Это решает проблему бесконечного цикла переподключений.
+                if (this.tiktokConnection !== client) return;
+                
                 if (this.manualTtDisconnect) return;
                 
                 console.log(`[TikTok - ${this.userId}] Соединение разорвано. Переподключение...`);
@@ -356,7 +310,6 @@ class UserSession {
         const isEnd = data.repeatEnd !== undefined ? data.repeatEnd : true;
         if (data.giftType === 1 && !isEnd) return;
 
-        // Поддержка различных форматов объектов, возвращаемых разными версиями TikTok библиотек
         const giftIdStr = String(data.gift?.id || data.giftId || '');
         const count = data.repeatCount || data.combo || 1;
         const diamonds = data.gift?.diamondCount || data.gift?.diamonds || data.diamondCount || 0;

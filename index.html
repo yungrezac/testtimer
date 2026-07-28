@@ -396,19 +396,19 @@
                                                 <>
                                                     <input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username (без ключей)" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />
                                                     <div className="flex items-center gap-2 relative group">
-                                                        <input type="text" value={config.ttSessionId || ''} onChange={e=>setConfig({...config, ttSessionId: e.target.value})} placeholder="ttwid (опционально, если ошибка)" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />
+                                                        <input type="text" value={config.ttSessionId || ''} onChange={e=>setConfig({...config, ttSessionId: e.target.value})} placeholder="sessionid (Обязательно для стабильности)" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />
                                                         <div className="text-slate-400 hover:text-white cursor-help">
                                                             <i className="fa-solid fa-circle-question text-lg"></i>
                                                         </div>
                                                         <div className="absolute top-full right-0 mt-2 hidden group-hover:block w-80 bg-slate-800 text-xs text-white p-4 rounded-xl border border-slate-600 shadow-2xl z-50">
-                                                            <p className="font-bold text-emerald-400 mb-2">Где взять ttwid (Если авто-подключение зависает):</p>
+                                                            <p className="font-bold text-emerald-400 mb-2">Где взять sessionid (Решает проблему обрывов):</p>
                                                             <ol className="list-decimal pl-4 space-y-1 text-slate-300">
-                                                                <li>Откройте сайт <b>tiktok.com</b> в браузере.</li>
-                                                                <li>Нажмите <b>F12</b> (откроются Инструменты).</li>
-                                                                <li>Сверху выберите вкладку <b>Application</b>.</li>
-                                                                <li>Слева найдите <b>Cookies &rarr; https://www.tiktok.com</b>.</li>
-                                                                <li>В таблице найдите строку с именем <b>ttwid</b>.</li>
-                                                                <li>Скопируйте текст из колонки <b>Value</b> и вставьте сюда.</li>
+                                                                <li>Откройте сайт <b>tiktok.com</b> и <b>ОБЯЗАТЕЛЬНО войдите в свой аккаунт</b>.</li>
+                                                                <li>Нажмите <b>F12</b> (откроются Инструменты разработчика).</li>
+                                                                <li>Сверху выберите вкладку <b>Application</b> (или "Память"/"Приложение").</li>
+                                                                <li>Слева в меню найдите <b>Cookies &rarr; https://www.tiktok.com</b>.</li>
+                                                                <li>В таблице найдите строку с именем <b>sessionid</b>.</li>
+                                                                <li>Скопируйте длинный текст из колонки <b>Value</b> (Значение) и вставьте в это поле.</li>
                                                             </ol>
                                                         </div>
                                                     </div>

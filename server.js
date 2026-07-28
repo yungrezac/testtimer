@@ -101,6 +101,7 @@ class UserSession {
     }
 
     broadcastAlert(data) { 
+        // Сохраняем в историю сервера для восстановления на пульте
         this.alertHistory.unshift(data);
         if (this.alertHistory.length > 50) this.alertHistory.pop();
         this.emit('new-alert', data); 
@@ -167,10 +168,28 @@ class UserSession {
 
     disconnectTikTok(customText = 'Отключено') {
         this.manualTtDisconnect = true;
-        if (this.tiktokConnection) { try { this.tiktokConnection.terminate(); } catch(e) {} this.tiktokConnection = null; }
+        
+        // Очищаем интервалы и таймауты
         if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
         if (this.ttPingInterval) { clearInterval(this.ttPingInterval); this.ttPingInterval = null; }
-        this.statusText.tt = { text: customText, isActive: false, isStreamLive: false }; this.broadcastStatus();
+        
+        // Жестко уничтожаем вебсокет
+        if (this.tiktokConnection) { 
+            try { 
+                // Снимаем все слушатели, чтобы избежать фантомных ивентов со старого подключения
+                this.tiktokConnection.removeAllListeners(); 
+                this.tiktokConnection.terminate(); 
+            } catch(e) {} 
+            this.tiktokConnection = null; 
+        }
+        
+        // Сбрасываем статистику для нового чистого подключения
+        this.currentStreamTotalLikes = 0;
+        this.lastProcessedLikesMilestone = null;
+        this.ttReconnectAttempts = 0;
+        
+        this.statusText.tt = { text: customText, isActive: false, isStreamLive: false }; 
+        this.broadcastStatus();
     }
 
     connectTikTok(username, apiKey) {
@@ -178,6 +197,7 @@ class UserSession {
         
         const cleanUsername = username.replace(/[@\s]/g, '');
         
+        // Гарантированно отключаем всё старое перед новым подключением
         this.disconnectTikTok();
         this.manualTtDisconnect = false;
         this.statusText.tt = { text: 'Подключение...', isActive: false, isStreamLive: false }; this.broadcastStatus();
@@ -239,7 +259,12 @@ class UserSession {
                 if (code === 4001 || code === 4003 || code === 4005 || code === 4404 || code === 1000 || code === 1005) { 
                     this.statusText.tt = { text: errorMsg, isActive: false, isStreamLive: false }; 
                     this.broadcastStatus();
-                    this.tiktokConnection = null;
+                    
+                    // Жесткое удаление
+                    if(this.tiktokConnection) {
+                        try { this.tiktokConnection.removeAllListeners(); } catch(e) {}
+                        this.tiktokConnection = null;
+                    }
                 } else {
                     this.statusText.tt = { text: `${errorMsg}. Переподключение...`, isActive: false, isStreamLive: false }; 
                     this.broadcastStatus();
@@ -414,6 +439,9 @@ class UserSession {
     }
 
     async connectDaToken(accessToken) {
+        // Отключаем старое
+        this.disconnectDa();
+        
         try {
             const res = await fetch('https://www.donationalerts.com/api/v1/user/oauth', { headers: { 'Authorization': `Bearer ${accessToken}` } });
             if (!res.ok) { this.statusText.da = 'Ошибка токена DA'; this.broadcastStatus(); return; }
@@ -452,13 +480,20 @@ class UserSession {
     }
 
     disconnectDa() {
-        if (this.daWs) { this.daWs.close(); this.daWs = null; }
+        if (this.daWs) { 
+            try {
+                this.daWs.removeAllListeners();
+                this.daWs.terminate();
+            } catch(e) {}
+            this.daWs = null; 
+        }
         this.statusText.da = 'Отключено'; this.broadcastStatus();
     }
 
     async connectDp(apiKey) {
         if (!apiKey) return;
-        if (this.dpInterval) clearInterval(this.dpInterval);
+        this.disconnectDp();
+        
         this.statusText.dp = 'Подключение...'; this.broadcastStatus();
         try {
             const res = await fetch('https://donatepay.ru/api/v1/transactions', {
@@ -494,7 +529,8 @@ class UserSession {
 
     async connectDx(token) {
         if (!token) return;
-        if (this.dxInterval) clearInterval(this.dxInterval);
+        this.disconnectDx();
+        
         this.statusText.dx = 'Подключение...'; this.broadcastStatus();
         try {
             const res = await fetch(`https://donatex.gg/api/v1/donations?skip=0&take=1`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -542,20 +578,18 @@ io.on('connection', (socket) => {
         const session = getSession(userId);
         socket.emit('status-update', session.statusText);
         socket.emit('settings-updated', session.timerState.settings);
+        
+        // Отправляем сохраненную историю пультам для синхронизации
         socket.emit('init-remote-data', { history: session.alertHistory });
+        
         session.broadcastTime();
     });
 
-    // Обработчик обновления настроек без перезапуска таймера
     socket.on('update-settings', (config) => {
         if (!userId) return; const session = getSession(userId);
         session.timerState.settings = config;
         session.timerState.settings.originalRouletteSlots = [...(config.rouletteSlots || [])];
         session.emit('settings-updated', config);
-        
-        // Принудительно рассылаем обновленное состояние всем клиентам сразу
-        session.broadcastTime();
-        session.broadcastStatus();
     });
 
     socket.on('start-timer', (config) => {

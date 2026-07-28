@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const WebSocket = require('ws');
 const path = require('path');
+const { WebcastPushConnection } = require('tiktok-live-connector');
 
 const app = express();
 const server = http.createServer(app);
@@ -43,11 +44,11 @@ class UserSession {
         
         // Подключения TikTok
         this.tiktokConnection = null;
-        this.ttPingInterval = null;
         this.reconnectTimeout = null;
         this.ttReconnectAttempts = 0;
         this.currentStreamTotalLikes = 0;
         this.lastProcessedLikesMilestone = null;
+        this.manualTtDisconnect = false;
         
         // Подключения DA, DP, DX
         this.daWs = null;
@@ -170,21 +171,15 @@ class UserSession {
         console.log(`[TikTok - ${this.userId}] Отключение: ${customText}`);
         this.manualTtDisconnect = true;
         
-        // Очищаем интервалы и таймауты
         if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
-        if (this.ttPingInterval) { clearInterval(this.ttPingInterval); this.ttPingInterval = null; }
         
-        // Жестко уничтожаем вебсокет
         if (this.tiktokConnection) { 
             try { 
-                // Снимаем все слушатели, чтобы избежать фантомных ивентов со старого подключения
-                this.tiktokConnection.removeAllListeners(); 
-                this.tiktokConnection.terminate(); 
+                this.tiktokConnection.disconnect(); 
             } catch(e) {} 
             this.tiktokConnection = null; 
         }
         
-        // Сбрасываем статистику для нового чистого подключения
         this.currentStreamTotalLikes = 0;
         this.lastProcessedLikesMilestone = null;
         this.ttReconnectAttempts = 0;
@@ -193,100 +188,73 @@ class UserSession {
         this.broadcastStatus();
     }
 
-    connectTikTok(username, apiKey) {
-        if (!username || !apiKey) return;
+    connectTikTok(username) {
+        if (!username) return;
         
         const cleanUsername = username.replace(/[@\s]/g, '');
         console.log(`[TikTok - ${this.userId}] Инициализация подключения для @${cleanUsername}...`);
         
-        // Гарантированно отключаем всё старое перед новым подключением
         this.disconnectTikTok();
         this.manualTtDisconnect = false;
-        this.statusText.tt = { text: 'Подключение к API...', isActive: false, isStreamLive: false }; this.broadcastStatus();
+        this.statusText.tt = { text: 'Подключение к серверу...', isActive: true, isStreamLive: false }; 
+        this.broadcastStatus();
 
         try {
-            const wsUrl = `wss://api.tik.tools?uniqueId=${encodeURIComponent(cleanUsername)}&apiKey=${encodeURIComponent(apiKey.trim())}`;
-            this.tiktokConnection = new WebSocket(wsUrl);
-            this.tiktokConnection.isAlive = true;
+            this.tiktokConnection = new WebcastPushConnection(cleanUsername, {
+                processInitialData: false,
+                enableExtendedGiftInfo: true
+            });
 
-            this.tiktokConnection.on('open', () => {
-                console.log(`[TikTok - ${this.userId}] Соединение с API установлено. Ожидание данных стрима @${cleanUsername}...`);
+            this.tiktokConnection.connect().then(state => {
+                console.info(`[TikTok - ${this.userId}] Стрим перехвачен, roomId: ${state.roomId}`);
                 this.ttReconnectAttempts = 0;
-                this.statusText.tt = { text: 'Поиск стрима...', isActive: true, isStreamLive: false }; this.broadcastStatus();
-                
-                this.ttPingInterval = setInterval(() => {
-                    if (this.tiktokConnection && this.tiktokConnection.readyState === WebSocket.OPEN) {
-                        if (this.tiktokConnection.isAlive === false) return this.tiktokConnection.terminate();
-                        this.tiktokConnection.isAlive = false; 
-                        this.tiktokConnection.ping();
-                    }
-                }, 30000);
+                this.statusText.tt = { text: 'Стрим перехвачен (Успешно)', isActive: true, isStreamLive: true }; 
+                this.broadcastStatus();
+                this.emit('play-success-sound', {});
+            }).catch(err => {
+                console.error(`[TikTok - ${this.userId}] Ошибка подключения:`, err.message);
+                this.statusText.tt = { text: `Ошибка: ${err.message}`, isActive: false, isStreamLive: false }; 
+                this.broadcastStatus();
             });
 
-            this.tiktokConnection.on('pong', () => { if (this.tiktokConnection) this.tiktokConnection.isAlive = true; });
-
-            this.tiktokConnection.on('message', (msg) => {
-                if (this.tiktokConnection) this.tiktokConnection.isAlive = true;
-                
-                if (!this.statusText.tt.isStreamLive) {
-                    console.log(`[TikTok - ${this.userId}] Успех! Перехвачены первые данные стрима @${cleanUsername}. Стрим онлайн.`);
-                    this.statusText.tt.isStreamLive = true;
-                    this.statusText.tt.text = 'Стрим перехвачен (Успешно)';
-                    this.broadcastStatus();
-                    this.emit('play-success-sound', {});
-                }
-
-                try {
-                    const events = JSON.parse(msg.toString());
-                    (Array.isArray(events) ? events : [events]).forEach(evt => {
-                        const eventName = evt.event || evt.type || evt.action; const data = evt.data || evt.payload || evt;
-                        if (eventName === 'gift') this.handleTikTokGift(data);
-                        else if (eventName === 'like') this.handleTikTokLike(data);
-                        else if (eventName === 'follow' || eventName === 'subscribe' || eventName === 'social') this.handleTikTokFollow(data);
-                        else if (eventName === 'streamEnd' || eventName === 'room_close' || eventName === 'live_end' || eventName === 'live_ended') {
-                            console.log(`[TikTok - ${this.userId}] Получен ивент завершения стрима @${cleanUsername}.`);
-                            this.disconnectTikTok('Стрим завершен');
-                        }
-                    });
-                } catch (e) {
-                    console.error(`[TikTok - ${this.userId}] Ошибка парсинга сообщения:`, e.message);
-                }
+            // Обработка подарков
+            this.tiktokConnection.on('gift', data => {
+                this.handleTikTokGift(data);
             });
 
-            this.tiktokConnection.on('close', (code, reason) => { 
+            // Обработка лайков
+            this.tiktokConnection.on('like', data => {
+                this.handleTikTokLike(data);
+            });
+
+            // Обработка подписок/фолловеров
+            this.tiktokConnection.on('follow', data => {
+                this.handleTikTokFollow(data);
+            });
+
+            // Окончание трансляции
+            this.tiktokConnection.on('streamEnd', () => {
+                console.log(`[TikTok - ${this.userId}] Получен ивент завершения стрима @${cleanUsername}.`);
+                this.disconnectTikTok('Стрим завершен');
+            });
+
+            this.tiktokConnection.on('error', err => {
+                console.error(`[TikTok - ${this.userId}] Ошибка коннектора:`, err.message);
+            });
+
+            this.tiktokConnection.on('disconnected', () => {
                 if (this.manualTtDisconnect) return;
                 
-                if (this.ttPingInterval) clearInterval(this.ttPingInterval);
+                console.log(`[TikTok - ${this.userId}] Соединение разорвано. Переподключение...`);
+                this.statusText.tt = { text: 'Переподключение...', isActive: false, isStreamLive: false }; 
+                this.broadcastStatus();
+                this.ttReconnectAttempts++;
                 
-                let errorMsg = `Обрыв (${code})`;
-                if (code === 4003) errorMsg = 'Стрим оффлайн (4003)';
-                else if (code === 4001) errorMsg = 'Неверный API ключ (4001)';
-                else if (code === 4404) errorMsg = 'Аккаунт не найден (4404)';
-                else if (code === 1000 || code === 1005) errorMsg = 'Стрим завершен';
-                
-                console.log(`[TikTok - ${this.userId}] Соединение закрыто. Код: ${code}. Статус: ${errorMsg}`);
+                let delay = this.ttReconnectAttempts >= 3 ? 120000 : (this.ttReconnectAttempts === 2 ? 30000 : 10000);
+                console.log(`[TikTok - ${this.userId}] Попытка переподключения #${this.ttReconnectAttempts} через ${delay}мс...`);
+                this.reconnectTimeout = setTimeout(() => this.connectTikTok(cleanUsername), delay);
+            });
 
-                if (code === 4001 || code === 4003 || code === 4005 || code === 4404 || code === 1000 || code === 1005) { 
-                    this.statusText.tt = { text: errorMsg, isActive: false, isStreamLive: false }; 
-                    this.broadcastStatus();
-                    
-                    // Жесткое удаление
-                    if(this.tiktokConnection) {
-                        try { this.tiktokConnection.removeAllListeners(); } catch(e) {}
-                        this.tiktokConnection = null;
-                    }
-                } else {
-                    this.statusText.tt = { text: `${errorMsg}. Переподключение...`, isActive: false, isStreamLive: false }; 
-                    this.broadcastStatus();
-                    this.ttReconnectAttempts++;
-                    let delay = this.ttReconnectAttempts >= 3 ? 120000 : (this.ttReconnectAttempts === 2 ? 30000 : 10000);
-                    console.log(`[TikTok - ${this.userId}] Попытка переподключения #${this.ttReconnectAttempts} через ${delay}мс...`);
-                    this.reconnectTimeout = setTimeout(() => this.connectTikTok(cleanUsername, apiKey), delay);
-                }
-            });
-            this.tiktokConnection.on('error', (err) => {
-                console.error(`[TikTok - ${this.userId}] Ошибка WebSocket:`, err.message);
-            });
         } catch (err) { 
             console.error(`[TikTok - ${this.userId}] Критическая ошибка подключения:`, err.message);
             this.disconnectTikTok(); 
@@ -704,7 +672,8 @@ io.on('connection', (socket) => {
     socket.on('roulette-animation-finished', () => { if(!userId) return; const s = getSession(userId); s.isRouletteBusy = false; setTimeout(()=>s.checkRouletteQueue(), 1000); });
     socket.on('bonus-roll-finished', (time) => { if(!userId) return; const s = getSession(userId); s.timerState.timeLeft = time; s.timerState.isRollingBonus = false; s.timerState.isRunning = true; s.broadcastTime(); });
 
-    socket.on('connect-tiktok', (d) => { if(userId) getSession(userId).connectTikTok(d.username, d.apiKey); });
+    // ИЗМЕНЕН ВЫЗОВ: теперь не передается apiKey
+    socket.on('connect-tiktok', (d) => { if(userId) getSession(userId).connectTikTok(d.username); });
     socket.on('disconnect-tiktok', () => { if(userId) getSession(userId).disconnectTikTok(); });
     socket.on('connect-da-token', (token) => { if(userId) getSession(userId).connectDaToken(token); });
     socket.on('disconnect-da', () => { if(userId) getSession(userId).disconnectDa(); });

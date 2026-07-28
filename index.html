@@ -249,7 +249,7 @@
             const daysLeft = subUntil ? Math.max(0, Math.ceil((new Date(subUntil) - new Date()) / (1000 * 60 * 60 * 24))) : 0;
 
             const defConfig = {
-                username: '', ttApiKey: '', daToken: '', dpApiKey: '', dxToken: '', 
+                username: '', daToken: '', dpApiKey: '', dxToken: '', 
                 initialTime: 60, bonusEnabled: true, bonusMin: 60, bonusMax: 300,
                 isPenaltyEnabled: true, penaltyAmount: 600, penaltyThreshold: 300, giftPenalty: null,
                 isSetTimeEnabled: true, giftSetTime: null, setTimeValue: 300, 
@@ -344,7 +344,7 @@
                             </div>
                             
                             <div className="flex items-center gap-4 mt-2">
-                                <div className="flex items-center gap-1.5" title="Статус API TikTools">
+                                <div className="flex items-center gap-1.5" title="Статус сервера">
                                     <div className={`w-2.5 h-2.5 rounded-full ${status.tt.isActive ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'} transition-all`}></div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Сервер</span>
                                 </div>
@@ -396,11 +396,11 @@
                                     
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-cyan-500/30 transition">
                                         <div className="w-12 h-12 bg-cyan-500/10 flex items-center justify-center rounded-full border border-cyan-500/20 shrink-0"><i className="fa-brands fa-tiktok text-cyan-400 text-2xl"></i></div>
-                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isActive ? 'text-emerald-400' : 'text-slate-500'}`}>{status.tt.text}</span></div>
+                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (Live Connector)</h3><span className={`text-[11px] font-bold ${status.tt.isActive ? 'text-emerald-400' : 'text-slate-500'}`}>{status.tt.text}</span></div>
                                         <div className="flex-1 flex gap-2" style={{ fontFamily: 'Inter' }}>
-                                            {!status.tt.isActive && <><input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /><input type="text" value={config.ttApiKey} onChange={e=>setConfig({...config, ttApiKey: e.target.value})} placeholder="API Key (tik.tools)" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /></>}
+                                            {!status.tt.isActive && <input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username (без ключей)" className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" />}
                                         </div>
-                                        <button onClick={() => { status.tt.isActive ? socket.emit('disconnect-tiktok') : socket.emit('connect-tiktok', { username: config.username, apiKey: config.ttApiKey }) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.tt.isActive ? 'bg-rose-600 hover:bg-rose-500' : 'bg-cyan-600 hover:bg-cyan-500'}`} style={{ fontFamily: 'Inter' }}>{status.tt.isActive ? 'Отключить' : 'Подключить'}</button>
+                                        <button onClick={() => { status.tt.isActive ? socket.emit('disconnect-tiktok') : socket.emit('connect-tiktok', { username: config.username }) }} className={`w-40 py-2 rounded-xl font-bold text-sm text-white transition ${status.tt.isActive ? 'bg-rose-600 hover:bg-rose-500' : 'bg-cyan-600 hover:bg-cyan-500'}`} style={{ fontFamily: 'Inter' }}>{status.tt.isActive ? 'Отключить' : 'Подключить'}</button>
                                     </div>
 
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-orange-500/30 transition">

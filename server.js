@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const WebSocket = require('ws');
 const path = require('path');
+const { WebcastPushConnection } = require('tiktok-live-connector');
 
 const app = express();
 const server = http.createServer(app);
@@ -38,8 +39,10 @@ class UserSession {
         this.rouletteQueue = [];
         this.isRouletteBusy = false;
         
+        // История событий для стабильности пульта
         this.alertHistory = [];
         
+        // Подключения TikTok
         this.tiktokConnection = null;
         this.reconnectTimeout = null;
         this.ttReconnectAttempts = 0;
@@ -47,6 +50,7 @@ class UserSession {
         this.lastProcessedLikesMilestone = null;
         this.manualTtDisconnect = false;
         
+        // Подключения DA, DP, DX
         this.daWs = null;
         this.dpInterval = null;
         this.dxInterval = null;
@@ -183,8 +187,7 @@ class UserSession {
         this.broadcastStatus();
     }
 
-    // ТЕПЕРЬ ФУНКЦИЯ АСИНХРОННАЯ (async), ЧТОБЫ ДОЖДАТЬСЯ ЗАГРУЗКИ БИБЛИОТЕКИ
-    async connectTikTok(username) {
+    connectTikTok(username) {
         if (!username) return;
         
         const cleanUsername = username.replace(/[@\s]/g, '');
@@ -196,18 +199,10 @@ class UserSession {
         this.broadcastStatus();
 
         try {
-            // Загружаем ESM-модуль "на лету" без ошибки CommonJS
-            const { WebcastPushConnection } = await import('tiktok-live-connector');
-
+            // Используем синхронный коннектор стабильной 1.x версии
             this.tiktokConnection = new WebcastPushConnection(cleanUsername, {
                 processInitialData: false,
-                enableExtendedGiftInfo: true,
-                enableWebsocketUpgrade: true,
-                requestPollingIntervalMs: 2000,
-                clientParams: {
-                    "app_language": "ru-RU",
-                    "device_platform": "web"
-                }
+                enableExtendedGiftInfo: true
             });
 
             this.tiktokConnection.connect().then(state => {

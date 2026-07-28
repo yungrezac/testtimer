@@ -198,8 +198,8 @@ class UserSession {
         this.broadcastStatus();
 
         try {
-            // Используем стандартный класс коннектора
-            const { WebcastPushConnection } = await import('piratetok-live-js');
+            // Импортируем ПРАВИЛЬНЫЕ классы из новой библиотеки
+            const { TikTokLiveClient, EventType } = await import('piratetok-live-js');
 
             let customCookie = '';
             console.log(`[TikTok - ${this.userId}] Запуск продвинутого анти-бот обхода для получения ttwid...`);
@@ -271,7 +271,8 @@ class UserSession {
                 }
             };
 
-            this.tiktokConnection = new WebcastPushConnection(cleanUsername, clientOptions);
+            // ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ КЛАСС: TikTokLiveClient вместо старого
+            this.tiktokConnection = new TikTokLiveClient(cleanUsername, clientOptions);
 
             // Обертка с тайм-аутом (предотвращает бесконечное зависание статуса "Подключение...")
             const connectPromise = this.tiktokConnection.connect();
@@ -289,16 +290,16 @@ class UserSession {
                 this.broadcastStatus();
             });
 
-            // Используем жестко заданные строки (надежнее, чем EventType, который может отсутствовать)
-            this.tiktokConnection.on('gift', data => {
+            // Используем EventType, который предоставляет новая библиотека (или fallbacks на строки)
+            this.tiktokConnection.on(EventType ? EventType.GIFT : 'gift', data => {
                 this.handleTikTokGift(data);
             });
 
-            this.tiktokConnection.on('like', data => {
+            this.tiktokConnection.on(EventType ? EventType.LIKE : 'like', data => {
                 this.handleTikTokLike(data);
             });
 
-            this.tiktokConnection.on('follow', data => {
+            this.tiktokConnection.on(EventType ? EventType.FOLLOW : 'follow', data => {
                 this.handleTikTokFollow(data);
             });
 
@@ -336,7 +337,7 @@ class UserSession {
         const isEnd = data.repeatEnd !== undefined ? data.repeatEnd : true;
         if (data.giftType === 1 && !isEnd) return;
 
-        // Fallbacks совместимы как со старым коннектором, так и с новым (PirateTok)
+        // Поддержка различных форматов объектов, возвращаемых разными версиями TikTok библиотек
         const giftIdStr = String(data.gift?.id || data.giftId || '');
         const count = data.repeatCount || data.combo || 1;
         const diamonds = data.gift?.diamondCount || data.gift?.diamonds || data.diamondCount || 0;

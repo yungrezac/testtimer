@@ -205,8 +205,20 @@ class UserSession {
             
             // Если пользователь ввел токен вручную в интерфейсе
             if (customSessionId && customSessionId.trim() !== '') {
-                customCookie = customSessionId.includes('ttwid=') ? customSessionId.trim() : `ttwid=${customSessionId.trim()};`;
-                console.log(`[TikTok - ${this.userId}] Используется ручной токен ttwid из интерфейса.`);
+                // Поддержка и простого значения, и строки "sessionid=..."
+                let cleanSessionId = customSessionId.trim();
+                if (cleanSessionId.includes('sessionid=')) {
+                    cleanSessionId = cleanSessionId.split('sessionid=')[1].split(';')[0];
+                } else if (cleanSessionId.includes('ttwid=')) {
+                    // На случай, если по привычке вставили ttwid
+                    cleanSessionId = cleanSessionId.split('ttwid=')[1].split(';')[0];
+                    customCookie = `ttwid=${cleanSessionId};`;
+                }
+                
+                if (!customCookie) {
+                    customCookie = `sessionid=${cleanSessionId};`;
+                    console.log(`[TikTok - ${this.userId}] Используется ручной токен sessionid из интерфейса.`);
+                }
             } else {
                 console.log(`[TikTok - ${this.userId}] Запуск продвинутого анти-бот обхода для получения ttwid...`);
                 

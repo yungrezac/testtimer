@@ -34,6 +34,7 @@
         const { useState, useEffect, useRef } = React;
         const socket = io();
 
+        // Измененный, более мягкий и короткий звук щелчка (чтобы не лагал)
         const playTickSound = () => {
             try {
                 if (!window.audioCtx) window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -47,9 +48,11 @@
                 gainNode.connect(audioCtx.destination);
                 
                 osc.type = 'sine';
+                // Мягкий, низкий тон барабана/деревяшки
                 osc.frequency.setValueAtTime(300, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.02);
                 
+                // Меньше громкости и очень быстрый спад
                 gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); 
                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.02);
                 
@@ -82,13 +85,7 @@
             useEffect(() => {
                 const urlParams = new URLSearchParams(window.location.search);
                 const uid = urlParams.get('uid');
-                
-                // Исправление зависания и потери коннекта
-                const onConnect = () => {
-                    if (uid) socket.emit('join-room', uid);
-                };
-                socket.on('connect', onConnect);
-                if (socket.connected) onConnect();
+                if (uid) socket.emit('join-room', uid);
 
                 const calculateOffset = (targetIndex) => { const itemW = 192; const gap = 16; return -(targetIndex * (itemW + gap)) + (1200 / 2) - (itemW / 2); };
 
@@ -162,14 +159,7 @@
                     }, 3000); 
                 });
 
-                return () => { 
-                    socket.off('connect', onConnect);
-                    socket.off('settings-updated');
-                    socket.off('new-alert');
-                    socket.off('start-roulette');
-                    socket.off('start-bonus-roll');
-                    cancelAnimationFrame(animateRef.current); 
-                };
+                return () => { socket.removeAllListeners(); cancelAnimationFrame(animateRef.current); };
             }, []);
 
             const fontFamily = state.config?.styles?.fontFamily || 'Inter'; 
@@ -235,3 +225,38 @@
                                         <div className="flex flex-col"><AutoScaleText text={state.user?.username} defaultSize={1.5} minSize={0.8} maxChars={15} className="text-white font-black leading-none mb-1 text-left" shadow={getStroke(false, enableStroke)} /><span className="text-indigo-300 font-bold text-sm tracking-wider uppercase">Крутит колесо</span></div></>}
                                     </div>
                                     <div className="relative w-full h-[200px] roulette-track-bg rounded-[2rem] overflow-hidden backdrop-blur-md border border-white/10 gpu-accelerated">
+                                        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-1.5 bg-white z-30 shadow-[0_0_20px_#fff,0_0_40px_rgba(255,255,255,0.8)] rounded-full"></div>
+                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[216px] h-[160px] border-4 border-white/80 rounded-[1.25rem] z-20 target-glow"></div>
+                                        <div className="flex h-full absolute left-0 items-center px-0 gpu-accelerated" style={{ transform: `translate3d(${state.offset}px, 0, 0)`, transition: `transform ${state.transitionDuration}ms cubic-bezier(0.1, 0.85, 0.15, 1)`, gap: '16px' }}>
+                                            {state.items.map((item, i) => (
+                                                <div key={i} className="w-48 h-36 flex-shrink-0 rounded-2xl flex items-center justify-center border-[3px] border-white/20 shadow-xl relative overflow-hidden px-2" style={{ backgroundColor: item.color || '#3b82f6' }}>
+                                                    <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-black/40"></div>
+                                                    <AutoScaleText text={item.label} defaultSize={2} minSize={0.8} maxChars={8} wrap={true} className="text-white font-black text-center leading-tight uppercase relative z-10" shadow={getStroke(false, enableStroke, '0 2px 5px rgba(0,0,0,1)')} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="w-[1200px] flex flex-col items-center justify-center bonus-pop drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
+                                    <div className="bg-black/60 backdrop-blur-xl rounded-[3rem] border-4 flex flex-col items-center justify-center w-[900px] min-h-[700px] p-10" style={{ borderColor: state.winner.color, boxShadow: `0 0 80px ${state.winner.color}60` }}>
+                                        {state.spinMode === 'bonus' ? <span className="text-4xl text-slate-300 font-bold uppercase tracking-widest mb-6" style={{ textShadow: getStroke(false, enableStroke) }}>Бонус:</span> : 
+                                        <div className="flex flex-col items-center gap-4 mb-6 text-center">
+                                            {state.user?.isLikesRoulette ? <i className="fa-solid fa-heart text-rose-500 text-[10rem] animate-pulse"></i> : <img src={state.user?.avatar} className="w-56 h-56 rounded-full border-[6px] border-indigo-500" />}
+                                            <AutoScaleText text={state.user?.username} defaultSize={4.5} minSize={2} maxChars={12} className="font-black text-white leading-none mb-6" shadow={getStroke(true, enableStroke, '0 6px 15px rgba(0,0,0,0.6)')} />
+                                            <span className="text-slate-300 font-bold uppercase text-3xl tracking-widest" style={{ textShadow: getStroke(false, enableStroke) }}>Выбивает:</span>
+                                        </div>}
+                                        <AutoScaleText text={state.winner.label} defaultSize={6.5} minSize={2.5} maxChars={12} wrap={true} className="leading-[1] font-black text-white text-center transform hover:scale-105 transition-transform" shadow={getStroke(true, enableStroke, `0px 10px 40px ${state.winner.color}, 0px 0px 80px ${state.winner.color}`)} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root')); root.render(<RouletteView />);
+    </script>
+</body>
+</html>

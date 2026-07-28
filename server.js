@@ -198,17 +198,14 @@ class UserSession {
         this.broadcastStatus();
 
         try {
-            // Динамический импорт современной версии библиотеки (решает проблему Node.js и ESM)
-            const { TikTokLiveConnection } = await import('tiktok-live-connector');
+            // Динамический импорт piratetok-live-js (решает проблему с EulerStream)
+            // Эта библиотека подключается напрямую по WebSockets без API-ключей.
+            const { TikTokLiveClient, EventType } = await import('piratetok-live-js');
 
-            // Используем новый класс TikTokLiveConnection вместо старого WebcastPushConnection
-            this.tiktokConnection = new TikTokLiveConnection(cleanUsername, {
-                processInitialData: false,
-                enableExtendedGiftInfo: true
-            });
+            this.tiktokConnection = new TikTokLiveClient(cleanUsername);
 
-            this.tiktokConnection.connect().then(state => {
-                console.info(`[TikTok - ${this.userId}] Стрим перехвачен, roomId: ${state.roomId}`);
+            this.tiktokConnection.connect().then(() => {
+                console.info(`[TikTok - ${this.userId}] Стрим перехвачен`);
                 this.ttReconnectAttempts = 0;
                 this.statusText.tt = { text: 'Стрим перехвачен (Успешно)', isActive: true, isStreamLive: true }; 
                 this.broadcastStatus();
@@ -219,19 +216,19 @@ class UserSession {
                 this.broadcastStatus();
             });
 
-            this.tiktokConnection.on('gift', data => {
+            this.tiktokConnection.on(EventType.gift, data => {
                 this.handleTikTokGift(data);
             });
 
-            this.tiktokConnection.on('like', data => {
+            this.tiktokConnection.on(EventType.like, data => {
                 this.handleTikTokLike(data);
             });
 
-            this.tiktokConnection.on('follow', data => {
+            this.tiktokConnection.on(EventType.follow, data => {
                 this.handleTikTokFollow(data);
             });
 
-            this.tiktokConnection.on('streamEnd', () => {
+            this.tiktokConnection.on(EventType.liveEnded, () => {
                 console.log(`[TikTok - ${this.userId}] Получен ивент завершения стрима @${cleanUsername}.`);
                 this.disconnectTikTok('Стрим завершен');
             });
@@ -265,14 +262,15 @@ class UserSession {
         const isEnd = data.repeatEnd !== undefined ? data.repeatEnd : true;
         if (data.giftType === 1 && !isEnd) return;
 
-        const giftIdStr = String(data.giftId || data.gift?.id || '');
+        // Fallbacks совместимы как со старым коннектором, так и с новым (PirateTok)
+        const giftIdStr = String(data.gift?.id || data.giftId || '');
         const count = data.repeatCount || data.combo || 1;
-        const diamonds = data.diamondCount || data.gift?.diamonds || 0;
+        const diamonds = data.gift?.diamondCount || data.gift?.diamonds || data.diamondCount || 0;
         const totalCoins = diamonds * count;
-        const nickname = data.nickname || data.user?.nickname || 'Зритель';
-        const avatar = data.profilePictureUrl || data.user?.avatarUrl || 'https://via.placeholder.com/48';
-        const giftName = data.giftName || data.gift?.name || 'Подарок';
-        const giftIcon = data.giftPictureUrl || data.gift?.icon || '';
+        const nickname = data.user?.nickname || data.nickname || 'Зритель';
+        const avatar = data.user?.profilePictureUrl || data.user?.avatarUrl || data.profilePictureUrl || 'https://via.placeholder.com/48';
+        const giftName = data.gift?.name || data.giftName || 'Подарок';
+        const giftIcon = data.gift?.icon?.urlList?.[0] || data.giftPictureUrl || data.gift?.icon || '';
 
         this.emit('check-and-save-gift', { gift_id: giftIdStr, name: giftName, icon: giftIcon, cost: diamonds });
 
@@ -356,10 +354,10 @@ class UserSession {
 
     handleTikTokLike(data) {
         if (this.timerState.isVictory || this.timerState.isRollingBonus) return;
-        const batchLikes = parseInt(data.likeCount || 1, 10);
-        const apiTotalLikes = parseInt(data.totalLikes, 10);
-        const nickname = data.nickname || data.user?.nickname || 'Зритель';
-        const avatar = data.profilePictureUrl || data.user?.avatarUrl || 'https://via.placeholder.com/48';
+        const batchLikes = parseInt(data.likeCount || data.count || 1, 10);
+        const apiTotalLikes = parseInt(data.totalLikes || data.total || 0, 10);
+        const nickname = data.user?.nickname || data.nickname || 'Зритель';
+        const avatar = data.user?.profilePictureUrl || data.user?.avatarUrl || data.profilePictureUrl || 'https://via.placeholder.com/48';
         
         if (!isNaN(apiTotalLikes) && apiTotalLikes > this.currentStreamTotalLikes) this.currentStreamTotalLikes = apiTotalLikes;
         else this.currentStreamTotalLikes += batchLikes;
@@ -389,7 +387,7 @@ class UserSession {
             return;
         }
         const limit = parseInt(this.timerState.settings.likeThreshold) || 100;
-        const userId = data.uniqueId || data.user?.uniqueId || String(Math.random());
+        const userId = String(data.user?.uniqueId || data.uniqueId || Math.random());
         this.timerState.userLikes[userId] = (this.timerState.userLikes[userId] || 0) + batchLikes;
 
         let triggers = Math.floor(this.timerState.userLikes[userId] / limit);
@@ -406,11 +404,10 @@ class UserSession {
 
     handleTikTokFollow(data) {
         if (this.timerState.isVictory || this.timerState.isRollingBonus || !this.timerState.settings.subsEnabled) return;
-        if (data.action && data.action !== 'follow' && data.action !== 'subscribe') return;
         
-        const nickname = data.nickname || data.user?.nickname || 'Зритель';
-        const avatar = data.profilePictureUrl || data.user?.avatarUrl || 'https://via.placeholder.com/48';
-        const userId = data.uniqueId || data.user?.uniqueId || String(Math.random());
+        const nickname = data.user?.nickname || data.nickname || 'Зритель';
+        const avatar = data.user?.profilePictureUrl || data.user?.avatarUrl || data.profilePictureUrl || 'https://via.placeholder.com/48';
+        const userId = String(data.user?.uniqueId || data.uniqueId || Math.random());
         
         if (!this.timerState.subbedUsers.has(userId)) {
             this.timerState.subbedUsers.add(userId);

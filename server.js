@@ -167,6 +167,7 @@ class UserSession {
     }
 
     disconnectTikTok(customText = 'Отключено') {
+        console.log(`[TikTok - ${this.userId}] Отключение: ${customText}`);
         this.manualTtDisconnect = true;
         
         // Очищаем интервалы и таймауты
@@ -196,11 +197,12 @@ class UserSession {
         if (!username || !apiKey) return;
         
         const cleanUsername = username.replace(/[@\s]/g, '');
+        console.log(`[TikTok - ${this.userId}] Инициализация подключения для @${cleanUsername}...`);
         
         // Гарантированно отключаем всё старое перед новым подключением
         this.disconnectTikTok();
         this.manualTtDisconnect = false;
-        this.statusText.tt = { text: 'Подключение...', isActive: false, isStreamLive: false }; this.broadcastStatus();
+        this.statusText.tt = { text: 'Подключение к API...', isActive: false, isStreamLive: false }; this.broadcastStatus();
 
         try {
             const wsUrl = `wss://api.tik.tools?uniqueId=${encodeURIComponent(cleanUsername)}&apiKey=${encodeURIComponent(apiKey.trim())}`;
@@ -208,9 +210,9 @@ class UserSession {
             this.tiktokConnection.isAlive = true;
 
             this.tiktokConnection.on('open', () => {
+                console.log(`[TikTok - ${this.userId}] Соединение с API установлено. Ожидание данных стрима @${cleanUsername}...`);
                 this.ttReconnectAttempts = 0;
-                this.statusText.tt = { text: 'Успешно подключено', isActive: true, isStreamLive: false }; this.broadcastStatus();
-                this.emit('play-success-sound', {});
+                this.statusText.tt = { text: 'Поиск стрима...', isActive: true, isStreamLive: false }; this.broadcastStatus();
                 
                 this.ttPingInterval = setInterval(() => {
                     if (this.tiktokConnection && this.tiktokConnection.readyState === WebSocket.OPEN) {
@@ -227,8 +229,11 @@ class UserSession {
                 if (this.tiktokConnection) this.tiktokConnection.isAlive = true;
                 
                 if (!this.statusText.tt.isStreamLive) {
+                    console.log(`[TikTok - ${this.userId}] Успех! Перехвачены первые данные стрима @${cleanUsername}. Стрим онлайн.`);
                     this.statusText.tt.isStreamLive = true;
+                    this.statusText.tt.text = 'Стрим перехвачен (Успешно)';
                     this.broadcastStatus();
+                    this.emit('play-success-sound', {});
                 }
 
                 try {
@@ -239,10 +244,13 @@ class UserSession {
                         else if (eventName === 'like') this.handleTikTokLike(data);
                         else if (eventName === 'follow' || eventName === 'subscribe' || eventName === 'social') this.handleTikTokFollow(data);
                         else if (eventName === 'streamEnd' || eventName === 'room_close' || eventName === 'live_end' || eventName === 'live_ended') {
+                            console.log(`[TikTok - ${this.userId}] Получен ивент завершения стрима @${cleanUsername}.`);
                             this.disconnectTikTok('Стрим завершен');
                         }
                     });
-                } catch (e) {}
+                } catch (e) {
+                    console.error(`[TikTok - ${this.userId}] Ошибка парсинга сообщения:`, e.message);
+                }
             });
 
             this.tiktokConnection.on('close', (code, reason) => { 
@@ -255,6 +263,8 @@ class UserSession {
                 else if (code === 4001) errorMsg = 'Неверный API ключ (4001)';
                 else if (code === 4404) errorMsg = 'Аккаунт не найден (4404)';
                 else if (code === 1000 || code === 1005) errorMsg = 'Стрим завершен';
+                
+                console.log(`[TikTok - ${this.userId}] Соединение закрыто. Код: ${code}. Статус: ${errorMsg}`);
 
                 if (code === 4001 || code === 4003 || code === 4005 || code === 4404 || code === 1000 || code === 1005) { 
                     this.statusText.tt = { text: errorMsg, isActive: false, isStreamLive: false }; 
@@ -270,11 +280,17 @@ class UserSession {
                     this.broadcastStatus();
                     this.ttReconnectAttempts++;
                     let delay = this.ttReconnectAttempts >= 3 ? 120000 : (this.ttReconnectAttempts === 2 ? 30000 : 10000);
+                    console.log(`[TikTok - ${this.userId}] Попытка переподключения #${this.ttReconnectAttempts} через ${delay}мс...`);
                     this.reconnectTimeout = setTimeout(() => this.connectTikTok(cleanUsername, apiKey), delay);
                 }
             });
-            this.tiktokConnection.on('error', () => {});
-        } catch (err) { this.disconnectTikTok(); }
+            this.tiktokConnection.on('error', (err) => {
+                console.error(`[TikTok - ${this.userId}] Ошибка WebSocket:`, err.message);
+            });
+        } catch (err) { 
+            console.error(`[TikTok - ${this.userId}] Критическая ошибка подключения:`, err.message);
+            this.disconnectTikTok(); 
+        }
     }
 
     handleTikTokGift(data) {
@@ -441,15 +457,20 @@ class UserSession {
     async connectDaToken(accessToken) {
         // Отключаем старое
         this.disconnectDa();
+        console.log(`[DA - ${this.userId}] Подключение DonationAlerts...`);
         
         try {
             const res = await fetch('https://www.donationalerts.com/api/v1/user/oauth', { headers: { 'Authorization': `Bearer ${accessToken}` } });
-            if (!res.ok) { this.statusText.da = 'Ошибка токена DA'; this.broadcastStatus(); return; }
+            if (!res.ok) { 
+                console.error(`[DA - ${this.userId}] Ошибка токена DA (Код ${res.status})`);
+                this.statusText.da = 'Ошибка токена DA'; this.broadcastStatus(); return; 
+            }
             const userData = await res.json();
             const userId = userData.data.id; const socketToken = userData.data.socket_connection_token;
 
             this.daWs = new WebSocket('wss://centrifugo.donationalerts.com/connection/websocket');
             this.daWs.on('open', () => {
+                console.log(`[DA - ${this.userId}] WebSocket открыт. Успешное подключение.`);
                 this.daWs.send(JSON.stringify({ "params": { "token": socketToken }, "id": 1 }));
                 this.statusText.da = 'Успешно подключено'; this.broadcastStatus();
                 this.emit('play-success-sound', {});
@@ -465,21 +486,36 @@ class UserSession {
                         });
                         const subData = await subRes.json();
                         this.daWs.send(JSON.stringify({ "params": { "channel": `$alerts:donation_${userId}`, "token": subData.channels[0].token }, "method": 1, "id": 2 }));
-                    } catch (err) {}
+                        console.log(`[DA - ${this.userId}] Подписка на канал донатов оформлена.`);
+                    } catch (err) {
+                        console.error(`[DA - ${this.userId}] Ошибка подписки на канал:`, err.message);
+                    }
                 }
                 let result = msg.result || msg;
                 if (result && result.channel === `$alerts:donation_${userId}` && result.data && result.data.data) {
                     try {
                         let don = typeof result.data.data === 'string' ? JSON.parse(result.data.data) : result.data.data;
-                        if (don.amount) this.processGenericDonation(don.id, don.username, don.amount, don.currency, 'DA');
-                    } catch (e) {}
+                        if (don.amount) {
+                            console.log(`[DA - ${this.userId}] Получен донат: ${don.amount} ${don.currency} от ${don.username}`);
+                            this.processGenericDonation(don.id, don.username, don.amount, don.currency, 'DA');
+                        }
+                    } catch (e) {
+                        console.error(`[DA - ${this.userId}] Ошибка парсинга доната:`, e.message);
+                    }
                 }
             });
-            this.daWs.on('close', () => { this.statusText.da = 'Соединение разорвано'; this.broadcastStatus(); });
-        } catch (err) { this.statusText.da = `Ошибка: ${err.message}`; this.broadcastStatus(); }
+            this.daWs.on('close', () => { 
+                console.log(`[DA - ${this.userId}] Соединение разорвано.`);
+                this.statusText.da = 'Соединение разорвано'; this.broadcastStatus(); 
+            });
+        } catch (err) { 
+            console.error(`[DA - ${this.userId}] Критическая ошибка:`, err.message);
+            this.statusText.da = `Ошибка: ${err.message}`; this.broadcastStatus(); 
+        }
     }
 
     disconnectDa() {
+        console.log(`[DA - ${this.userId}] Отключение.`);
         if (this.daWs) { 
             try {
                 this.daWs.removeAllListeners();
@@ -493,6 +529,7 @@ class UserSession {
     async connectDp(apiKey) {
         if (!apiKey) return;
         this.disconnectDp();
+        console.log(`[DP - ${this.userId}] Подключение DonatePay...`);
         
         this.statusText.dp = 'Подключение...'; this.broadcastStatus();
         try {
@@ -502,6 +539,7 @@ class UserSession {
             });
             const data = await res.json();
             if (data.status === 'success') {
+                console.log(`[DP - ${this.userId}] Успешно подключено.`);
                 this.statusText.dp = 'Успешно подключено'; this.broadcastStatus();
                 if (data.data && data.data.length > 0) this.lastDpDonationId = data.data[0].id;
                 this.dpInterval = setInterval(async () => {
@@ -511,18 +549,26 @@ class UserSession {
                         if (d.status === 'success' && d.data) {
                             d.data.reverse().forEach(don => {
                                 if (!this.lastDpDonationId || don.id > this.lastDpDonationId) {
-                                    this.lastDpDonationId = don.id; this.processGenericDonation(don.id, don.what || don.name, don.sum, don.currency, 'DP');
+                                    this.lastDpDonationId = don.id; 
+                                    console.log(`[DP - ${this.userId}] Получен донат: ${don.sum} ${don.currency} от ${don.what || don.name}`);
+                                    this.processGenericDonation(don.id, don.what || don.name, don.sum, don.currency, 'DP');
                                 }
                             });
                         }
-                    } catch(e) {}
+                    } catch(e) {
+                        // Игнорируем мелкие ошибки интервала
+                    }
                 }, 10000);
                 this.emit('play-success-sound', {});
             } else throw new Error(data.message || 'Ошибка DP');
-        } catch (e) { this.statusText.dp = `Ошибка: ${e.message}`; this.broadcastStatus(); }
+        } catch (e) { 
+            console.error(`[DP - ${this.userId}] Ошибка:`, e.message);
+            this.statusText.dp = `Ошибка: ${e.message}`; this.broadcastStatus(); 
+        }
     }
 
     disconnectDp() {
+        console.log(`[DP - ${this.userId}] Отключение.`);
         if (this.dpInterval) { clearInterval(this.dpInterval); this.dpInterval = null; }
         this.statusText.dp = 'Отключено'; this.broadcastStatus();
     }
@@ -530,11 +576,13 @@ class UserSession {
     async connectDx(token) {
         if (!token) return;
         this.disconnectDx();
+        console.log(`[DX - ${this.userId}] Подключение DonateX.gg...`);
         
         this.statusText.dx = 'Подключение...'; this.broadcastStatus();
         try {
             const res = await fetch(`https://donatex.gg/api/v1/donations?skip=0&take=1`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (res.ok) {
+                console.log(`[DX - ${this.userId}] Успешно подключено.`);
                 this.statusText.dx = 'Успешно подключено'; this.broadcastStatus();
                 this.dxInterval = setInterval(async () => {
                     try {
@@ -545,6 +593,7 @@ class UserSession {
                                 if (!this.dxProcessedIds.has(don.id)) {
                                     this.dxProcessedIds.add(don.id);
                                     if(this.dxProcessedIds.size > 1000) this.dxProcessedIds = new Set(Array.from(this.dxProcessedIds).slice(-100));
+                                    console.log(`[DX - ${this.userId}] Получен донат: ${don.amountInRub || don.amount} RUB от ${don.username}`);
                                     this.processGenericDonation(don.id, don.username, don.amountInRub || don.amount, 'RUB', 'DX');
                                 }
                             });
@@ -553,10 +602,14 @@ class UserSession {
                 }, 10000);
                 this.emit('play-success-sound', {});
             } else throw new Error('Ошибка токена DX');
-        } catch (e) { this.statusText.dx = `Ошибка: ${e.message}`; this.broadcastStatus(); }
+        } catch (e) { 
+            console.error(`[DX - ${this.userId}] Ошибка:`, e.message);
+            this.statusText.dx = `Ошибка: ${e.message}`; this.broadcastStatus(); 
+        }
     }
 
     disconnectDx() {
+        console.log(`[DX - ${this.userId}] Отключение.`);
         if (this.dxInterval) { clearInterval(this.dxInterval); this.dxInterval = null; }
         this.statusText.dx = 'Отключено'; this.broadcastStatus();
     }

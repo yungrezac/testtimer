@@ -198,7 +198,8 @@ class UserSession {
         this.broadcastStatus();
 
         try {
-            const { TikTokLiveClient, EventType } = await import('piratetok-live-js');
+            // Используем стандартный класс коннектора
+            const { WebcastPushConnection } = await import('piratetok-live-js');
 
             let customCookie = '';
             console.log(`[TikTok - ${this.userId}] Запуск продвинутого анти-бот обхода для получения ttwid...`);
@@ -255,11 +256,14 @@ class UserSession {
             }
 
             if (!customCookie) {
-                console.warn(`[TikTok - ${this.userId}] Все стратегии получения ttwid не удались. IP сервера, вероятно, имеет высокий риск (блокировка). Передаем управление коннектору.`);
+                console.warn(`[TikTok - ${this.userId}] Все стратегии получения ttwid не удались. Передаем управление коннектору.`);
             }
 
             const clientOptions = {
+                processInitialData: false,
+                enableExtendedGiftInfo: true,
                 requestOptions: {
+                    timeout: 10000,
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                         ...(customCookie ? { 'Cookie': customCookie } : {})
@@ -267,9 +271,13 @@ class UserSession {
                 }
             };
 
-            this.tiktokConnection = new TikTokLiveClient(cleanUsername, clientOptions);
+            this.tiktokConnection = new WebcastPushConnection(cleanUsername, clientOptions);
 
-            this.tiktokConnection.connect().then(() => {
+            // Обертка с тайм-аутом (предотвращает бесконечное зависание статуса "Подключение...")
+            const connectPromise = this.tiktokConnection.connect();
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Таймаут подключения (TikTok не ответил за 15 сек)')), 15000));
+
+            Promise.race([connectPromise, timeoutPromise]).then(state => {
                 console.info(`[TikTok - ${this.userId}] Стрим перехвачен`);
                 this.ttReconnectAttempts = 0;
                 this.statusText.tt = { text: 'Стрим перехвачен (Успешно)', isActive: true, isStreamLive: true }; 
@@ -281,19 +289,20 @@ class UserSession {
                 this.broadcastStatus();
             });
 
-            this.tiktokConnection.on(EventType.gift, data => {
+            // Используем жестко заданные строки (надежнее, чем EventType, который может отсутствовать)
+            this.tiktokConnection.on('gift', data => {
                 this.handleTikTokGift(data);
             });
 
-            this.tiktokConnection.on(EventType.like, data => {
+            this.tiktokConnection.on('like', data => {
                 this.handleTikTokLike(data);
             });
 
-            this.tiktokConnection.on(EventType.follow, data => {
+            this.tiktokConnection.on('follow', data => {
                 this.handleTikTokFollow(data);
             });
 
-            this.tiktokConnection.on(EventType.liveEnded, () => {
+            this.tiktokConnection.on('streamEnd', () => {
                 console.log(`[TikTok - ${this.userId}] Получен ивент завершения стрима @${cleanUsername}.`);
                 this.disconnectTikTok('Стрим завершен');
             });

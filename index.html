@@ -272,7 +272,16 @@
             });
 
             useEffect(() => {
-                socket.emit('join-room', user.id);
+                // Обработчик подключения/переподключения сокета
+                const onConnect = () => {
+                    if (user && user.id) {
+                        socket.emit('join-room', user.id);
+                    }
+                };
+                
+                socket.on('connect', onConnect);
+                if (socket.connected) onConnect();
+
                 supabase.from('ttimer_settings').select('config').eq('user_id', user.id).single().then(({ data, error }) => {
                     if (data && data.config) {
                         const merged = { ...defConfig, ...data.config, styles: { ...defConfig.styles, ...(data.config.styles || {}) } };
@@ -283,14 +292,31 @@
 
                 socket.on('status-update', s => setStatus(s));
                 socket.on('timer-tick', s => setIsRunning(s.isRunning));
-                window.addEventListener('message', (e) => { if (e.data && e.data.type === 'da_auth') { const hash = new URLSearchParams(e.data.hash); const token = hash.get('access_token'); if (token) socket.emit('connect-da-token', token); } });
-                return () => { socket.off('status-update'); socket.off('timer-tick'); };
+                
+                const handleMessage = (e) => { 
+                    if (e.data && e.data.type === 'da_auth') { 
+                        const hash = new URLSearchParams(e.data.hash); 
+                        const token = hash.get('access_token'); 
+                        if (token) socket.emit('connect-da-token', token); 
+                    } 
+                };
+                window.addEventListener('message', handleMessage);
+                
+                return () => { 
+                    socket.off('connect', onConnect);
+                    socket.off('status-update'); 
+                    socket.off('timer-tick'); 
+                    window.removeEventListener('message', handleMessage);
+                };
             }, [user.id]);
 
-            const handleSave = async () => { 
-                await supabase.from('ttimer_settings').upsert({ user_id: user.id, config });
-                setSavedConfig(config); 
+            const handleSave = () => { 
+                // Мгновенное применение настроек на сервере и всех виджетах без ожидания ответа БД
                 socket.emit('update-settings', formatPayload(config)); 
+                setSavedConfig(config); 
+                
+                // Фоновое сохранение в Supabase
+                supabase.from('ttimer_settings').upsert({ user_id: user.id, config }).catch(e => console.error("Ошибка сохранения БД:", e));
             };
             const handleCancel = () => { setConfig(savedConfig); };
             const setCfgStyle = (key, val) => setConfig(p => ({...p, styles: {...p.styles, [key]: val}}));
@@ -363,14 +389,14 @@
                     <div className="flex-1 overflow-y-auto p-8 relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950 pb-32">
                         <div className="max-w-[1200px] mx-auto space-y-6">
                             
-                            {/* СОДЕРЖИМОЕ ВКЛАДОК (Без изменений) */}
+                            {/* СОДЕРЖИМОЕ ВКЛАДОК */}
                             {activeTab === 'connect' && (
                                 <div className="space-y-4 animate-fade-in-up">
                                     <h2 className="text-3xl font-black text-white mb-6">Подключения</h2>
                                     
                                     <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex items-center gap-4 hover:border-cyan-500/30 transition">
                                         <div className="w-12 h-12 bg-cyan-500/10 flex items-center justify-center rounded-full border border-cyan-500/20 shrink-0"><i className="fa-brands fa-tiktok text-cyan-400 text-2xl"></i></div>
-                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isStreamLive ? 'text-emerald-400' : (status.tt.isActive ? 'text-amber-400' : 'text-slate-500')}`}>{status.tt.text}</span></div>
+                                        <div className="flex flex-col w-1/4 shrink-0"><h3 className="font-bold text-white">TikTok (TikTool)</h3><span className={`text-[11px] font-bold ${status.tt.isActive ? 'text-emerald-400' : 'text-slate-500'}`}>{status.tt.text}</span></div>
                                         <div className="flex-1 flex gap-2" style={{ fontFamily: 'Inter' }}>
                                             {!status.tt.isActive && <><input type="text" value={config.username} onChange={e=>setConfig({...config, username: e.target.value})} placeholder="@username" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /><input type="text" value={config.ttApiKey} onChange={e=>setConfig({...config, ttApiKey: e.target.value})} placeholder="API Key (tik.tools)" className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 outline-none text-sm text-white" /></>}
                                         </div>

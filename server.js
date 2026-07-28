@@ -3,7 +3,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const WebSocket = require('ws');
 const path = require('path');
-const { WebcastPushConnection } = require('tiktok-live-connector');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,10 +38,8 @@ class UserSession {
         this.rouletteQueue = [];
         this.isRouletteBusy = false;
         
-        // История событий для стабильности пульта (сохраняем последние 50)
         this.alertHistory = [];
         
-        // Подключения TikTok
         this.tiktokConnection = null;
         this.reconnectTimeout = null;
         this.ttReconnectAttempts = 0;
@@ -50,7 +47,6 @@ class UserSession {
         this.lastProcessedLikesMilestone = null;
         this.manualTtDisconnect = false;
         
-        // Подключения DA, DP, DX
         this.daWs = null;
         this.dpInterval = null;
         this.dxInterval = null;
@@ -102,7 +98,6 @@ class UserSession {
     }
 
     broadcastAlert(data) { 
-        // Сохраняем в историю сервера для восстановления на пульте
         this.alertHistory.unshift(data);
         if (this.alertHistory.length > 50) this.alertHistory.pop();
         this.emit('new-alert', data); 
@@ -188,7 +183,8 @@ class UserSession {
         this.broadcastStatus();
     }
 
-    connectTikTok(username) {
+    // ТЕПЕРЬ ФУНКЦИЯ АСИНХРОННАЯ (async), ЧТОБЫ ДОЖДАТЬСЯ ЗАГРУЗКИ БИБЛИОТЕКИ
+    async connectTikTok(username) {
         if (!username) return;
         
         const cleanUsername = username.replace(/[@\s]/g, '');
@@ -200,18 +196,18 @@ class UserSession {
         this.broadcastStatus();
 
         try {
+            // Загружаем ESM-модуль "на лету" без ошибки CommonJS
+            const { WebcastPushConnection } = await import('tiktok-live-connector');
+
             this.tiktokConnection = new WebcastPushConnection(cleanUsername, {
                 processInitialData: false,
                 enableExtendedGiftInfo: true,
-                enableWebsocketUpgrade: true, // Включаем стабильный WebSocket
+                enableWebsocketUpgrade: true,
                 requestPollingIntervalMs: 2000,
                 clientParams: {
                     "app_language": "ru-RU",
                     "device_platform": "web"
                 }
-                // Если ошибки 404/429 будут повторяться, раскомментируйте строку ниже 
-                // и вставьте ваш sessionId из куки TikTok браузера (он дает 100% стабильность):
-                // sessionId: 'ВАШ_SESSION_ID_ИЗ_COOKIES'
             });
 
             this.tiktokConnection.connect().then(state => {
@@ -226,22 +222,18 @@ class UserSession {
                 this.broadcastStatus();
             });
 
-            // Обработка подарков
             this.tiktokConnection.on('gift', data => {
                 this.handleTikTokGift(data);
             });
 
-            // Обработка лайков
             this.tiktokConnection.on('like', data => {
                 this.handleTikTokLike(data);
             });
 
-            // Обработка подписок/фолловеров
             this.tiktokConnection.on('follow', data => {
                 this.handleTikTokFollow(data);
             });
 
-            // Окончание трансляции
             this.tiktokConnection.on('streamEnd', () => {
                 console.log(`[TikTok - ${this.userId}] Получен ивент завершения стрима @${cleanUsername}.`);
                 this.disconnectTikTok('Стрим завершен');
@@ -260,12 +252,13 @@ class UserSession {
                 this.ttReconnectAttempts++;
                 
                 let delay = this.ttReconnectAttempts >= 3 ? 120000 : (this.ttReconnectAttempts === 2 ? 30000 : 10000);
-                console.log(`[TikTok - ${this.userId}] Попытка переподключения #${this.ttReconnectAttempts} через ${delay}мс...`);
                 this.reconnectTimeout = setTimeout(() => this.connectTikTok(cleanUsername), delay);
             });
 
         } catch (err) { 
             console.error(`[TikTok - ${this.userId}] Критическая ошибка подключения:`, err.message);
+            this.statusText.tt = { text: `Ошибка: ${err.message}`, isActive: false, isStreamLive: false };
+            this.broadcastStatus();
             this.disconnectTikTok(); 
         }
     }
@@ -432,7 +425,6 @@ class UserSession {
     }
 
     async connectDaToken(accessToken) {
-        // Отключаем старое
         this.disconnectDa();
         console.log(`[DA - ${this.userId}] Подключение DonationAlerts...`);
         
@@ -533,7 +525,6 @@ class UserSession {
                             });
                         }
                     } catch(e) {
-                        // Игнорируем мелкие ошибки интервала
                     }
                 }, 10000);
                 this.emit('play-success-sound', {});
@@ -608,10 +599,7 @@ io.on('connection', (socket) => {
         const session = getSession(userId);
         socket.emit('status-update', session.statusText);
         socket.emit('settings-updated', session.timerState.settings);
-        
-        // Отправляем сохраненную историю пультам для синхронизации
         socket.emit('init-remote-data', { history: session.alertHistory });
-        
         session.broadcastTime();
     });
 

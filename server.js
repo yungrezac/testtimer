@@ -202,7 +202,16 @@ class UserSession {
         try {
             this.tiktokConnection = new WebcastPushConnection(cleanUsername, {
                 processInitialData: false,
-                enableExtendedGiftInfo: true
+                enableExtendedGiftInfo: true,
+                enableWebsocketUpgrade: true, // Включаем стабильный WebSocket
+                requestPollingIntervalMs: 2000,
+                clientParams: {
+                    "app_language": "ru-RU",
+                    "device_platform": "web"
+                }
+                // Если ошибки 404/429 будут повторяться, раскомментируйте строку ниже 
+                // и вставьте ваш sessionId из куки TikTok браузера (он дает 100% стабильность):
+                // sessionId: 'ВАШ_SESSION_ID_ИЗ_COOKIES'
             });
 
             this.tiktokConnection.connect().then(state => {
@@ -672,7 +681,6 @@ io.on('connection', (socket) => {
     socket.on('roulette-animation-finished', () => { if(!userId) return; const s = getSession(userId); s.isRouletteBusy = false; setTimeout(()=>s.checkRouletteQueue(), 1000); });
     socket.on('bonus-roll-finished', (time) => { if(!userId) return; const s = getSession(userId); s.timerState.timeLeft = time; s.timerState.isRollingBonus = false; s.timerState.isRunning = true; s.broadcastTime(); });
 
-    // ИЗМЕНЕН ВЫЗОВ: теперь не передается apiKey
     socket.on('connect-tiktok', (d) => { if(userId) getSession(userId).connectTikTok(d.username); });
     socket.on('disconnect-tiktok', () => { if(userId) getSession(userId).disconnectTikTok(); });
     socket.on('connect-da-token', (token) => { if(userId) getSession(userId).connectDaToken(token); });

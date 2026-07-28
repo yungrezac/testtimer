@@ -3,7 +3,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const WebSocket = require('ws');
 const path = require('path');
-const { WebcastPushConnection } = require('tiktok-live-connector');
 
 const app = express();
 const server = http.createServer(app);
@@ -187,7 +186,7 @@ class UserSession {
         this.broadcastStatus();
     }
 
-    connectTikTok(username) {
+    async connectTikTok(username) {
         if (!username) return;
         
         const cleanUsername = username.replace(/[@\s]/g, '');
@@ -199,8 +198,11 @@ class UserSession {
         this.broadcastStatus();
 
         try {
-            // Используем синхронный коннектор стабильной 1.x версии
-            this.tiktokConnection = new WebcastPushConnection(cleanUsername, {
+            // Динамический импорт современной версии библиотеки (решает проблему Node.js и ESM)
+            const { TikTokLiveConnection } = await import('tiktok-live-connector');
+
+            // Используем новый класс TikTokLiveConnection вместо старого WebcastPushConnection
+            this.tiktokConnection = new TikTokLiveConnection(cleanUsername, {
                 processInitialData: false,
                 enableExtendedGiftInfo: true
             });
@@ -252,7 +254,7 @@ class UserSession {
 
         } catch (err) { 
             console.error(`[TikTok - ${this.userId}] Критическая ошибка подключения:`, err.message);
-            this.statusText.tt = { text: `Ошибка: ${err.message}`, isActive: false, isStreamLive: false };
+            this.statusText.tt = { text: `Ошибка системы: ${err.message}`, isActive: false, isStreamLive: false };
             this.broadcastStatus();
             this.disconnectTikTok(); 
         }
@@ -519,8 +521,7 @@ class UserSession {
                                 }
                             });
                         }
-                    } catch(e) {
-                    }
+                    } catch(e) {}
                 }, 10000);
                 this.emit('play-success-sound', {});
             } else throw new Error(data.message || 'Ошибка DP');

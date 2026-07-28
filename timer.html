@@ -53,7 +53,14 @@
             useEffect(() => {
                 const urlParams = new URLSearchParams(window.location.search);
                 const uid = urlParams.get('uid');
-                if (uid) socket.emit('join-room', uid);
+                
+                // Исправление зависания: Автоматический перезаход в комнату при переподключении (без перезагрузки страницы)
+                const onConnect = () => {
+                    if (uid) socket.emit('join-room', uid);
+                };
+                
+                socket.on('connect', onConnect);
+                if (socket.connected) onConnect();
 
                 socket.on('settings-updated', cfg => setConfig(cfg));
                 socket.on('timer-tick', s => setState(s));
@@ -63,7 +70,13 @@
                     setAlerts(prev => [...prev, { id, amount: data.timeAdded, text: text, type: data.type }]);
                     setTimeout(() => setAlerts(prev => prev.filter(n => n.id !== id)), 2500);
                 });
-                return () => { socket.off('settings-updated'); socket.off('timer-tick'); socket.off('new-alert'); };
+                
+                return () => { 
+                    socket.off('connect', onConnect);
+                    socket.off('settings-updated'); 
+                    socket.off('timer-tick'); 
+                    socket.off('new-alert'); 
+                };
             }, []);
 
             const styles = config.styles || {};

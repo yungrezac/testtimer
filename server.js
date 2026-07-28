@@ -198,49 +198,71 @@ class UserSession {
         this.broadcastStatus();
 
         try {
-            // Динамический импорт piratetok-live-js
             const { TikTokLiveClient, EventType } = await import('piratetok-live-js');
 
-            // 1. Ручной перехват ttwid cookie с жесткой маскировкой под обычный браузер
             let customCookie = '';
-            try {
-                const fetchRes = await fetch('https://www.tiktok.com/explore', {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-                        'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-                        'Sec-Ch-Ua-Mobile': '?0',
-                        'Sec-Ch-Ua-Platform': '"Windows"',
-                        'Sec-Fetch-Dest': 'document',
-                        'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'none'
-                    }
-                });
-                
-                const setCookieHeader = fetchRes.headers.get('set-cookie');
-                if (setCookieHeader && setCookieHeader.includes('ttwid=')) {
-                    const ttwid = setCookieHeader.split('ttwid=')[1].split(';')[0];
-                    customCookie = `ttwid=${ttwid};`;
-                    console.log(`[TikTok - ${this.userId}] ttwid успешно сгенерирован вручную.`);
-                } else {
-                    console.log(`[TikTok - ${this.userId}] Сервер TikTok не выдал ttwid, полагаемся на коннектор.`);
+            console.log(`[TikTok - ${this.userId}] Запуск продвинутого анти-бот обхода для получения ttwid...`);
+            
+            const fetchStrategies = [
+                // 1. Прямой запрос к API генерации гостевого токена (без HTML и CloudFlare-капчи)
+                async () => {
+                    return await fetch('https://www.tiktok.com/passport/web/guest/ttwid/', {
+                        method: 'POST',
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                            'Content-Type': 'application/json',
+                            'Origin': 'https://www.tiktok.com',
+                            'Referer': 'https://www.tiktok.com/'
+                        },
+                        body: JSON.stringify({ "app_id": 1988, "region": "us" })
+                    });
+                },
+                // 2. Имитация мобильного устройства (Мобильные API реже блокируют)
+                async () => {
+                    return await fetch('https://m.tiktok.com/node/share/discover', {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+                            'Accept': 'application/json'
+                        }
+                    });
+                },
+                // 3. Запрос на главную страницу с имитацией перехода из Google
+                async () => {
+                    return await fetch(`https://www.tiktok.com/`, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                            'Referer': 'https://www.google.com/'
+                        }
+                    });
                 }
-            } catch (err) {
-                console.log(`[TikTok - ${this.userId}] Ошибка ручного запроса ttwid:`, err.message);
+            ];
+
+            for (let i = 0; i < fetchStrategies.length; i++) {
+                try {
+                    const fetchRes = await fetchStrategies[i]();
+                    const setCookieHeader = fetchRes.headers.get('set-cookie');
+                    
+                    if (setCookieHeader && setCookieHeader.includes('ttwid=')) {
+                        const ttwid = setCookieHeader.split('ttwid=')[1].split(';')[0];
+                        customCookie = `ttwid=${ttwid};`;
+                        console.log(`[TikTok - ${this.userId}] ttwid успешно получен (Стратегия ${i+1})`);
+                        break;
+                    }
+                } catch (err) {
+                    console.log(`[TikTok - ${this.userId}] Стратегия ${i+1} не удалась, пробуем следующую...`);
+                }
             }
 
-            // 2. Инициализация клиента с подмененными заголовками для обхода WAF
+            if (!customCookie) {
+                console.warn(`[TikTok - ${this.userId}] Все стратегии получения ttwid не удались. IP сервера, вероятно, имеет высокий риск (блокировка). Передаем управление коннектору.`);
+            }
+
             const clientOptions = {
-                // Передаем заголовки в разных форматах для поддержки внутренней структуры коннектора
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                    'Cookie': customCookie
-                },
                 requestOptions: {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                        'Cookie': customCookie
+                        ...(customCookie ? { 'Cookie': customCookie } : {})
                     }
                 }
             };

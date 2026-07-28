@@ -101,7 +101,6 @@ class UserSession {
     }
 
     broadcastAlert(data) { 
-        // Сохраняем в историю сервера для восстановления на пульте
         this.alertHistory.unshift(data);
         if (this.alertHistory.length > 50) this.alertHistory.pop();
         this.emit('new-alert', data); 
@@ -181,7 +180,7 @@ class UserSession {
         
         this.disconnectTikTok();
         this.manualTtDisconnect = false;
-        this.statusText.tt = { text: 'Подключение к API...', isActive: false, isStreamLive: false }; this.broadcastStatus();
+        this.statusText.tt = { text: 'Подключение...', isActive: false, isStreamLive: false }; this.broadcastStatus();
 
         try {
             const wsUrl = `wss://api.tik.tools?uniqueId=${encodeURIComponent(cleanUsername)}&apiKey=${encodeURIComponent(apiKey.trim())}`;
@@ -190,10 +189,8 @@ class UserSession {
 
             this.tiktokConnection.on('open', () => {
                 this.ttReconnectAttempts = 0;
-                // ИЗМЕНЕНИЕ: Подключились к API, но еще ждем события от стрима
-                this.statusText.tt = { text: 'Ожидание стрима...', isActive: true, isStreamLive: false }; 
-                this.broadcastStatus();
-                // Звук перенесен в on('message')
+                this.statusText.tt = { text: 'Успешно подключено', isActive: true, isStreamLive: false }; this.broadcastStatus();
+                this.emit('play-success-sound', {});
                 
                 this.ttPingInterval = setInterval(() => {
                     if (this.tiktokConnection && this.tiktokConnection.readyState === WebSocket.OPEN) {
@@ -209,12 +206,9 @@ class UserSession {
             this.tiktokConnection.on('message', (msg) => {
                 if (this.tiktokConnection) this.tiktokConnection.isAlive = true;
                 
-                // ИЗМЕНЕНИЕ: Первое полученное сообщение подтверждает, что стрим онлайн
                 if (!this.statusText.tt.isStreamLive) {
                     this.statusText.tt.isStreamLive = true;
-                    this.statusText.tt.text = 'Успешно подключено';
                     this.broadcastStatus();
-                    this.emit('play-success-sound', {}); // Играем звук только сейчас
                 }
 
                 try {
@@ -548,18 +542,20 @@ io.on('connection', (socket) => {
         const session = getSession(userId);
         socket.emit('status-update', session.statusText);
         socket.emit('settings-updated', session.timerState.settings);
-        
-        // Отправляем сохраненную историю пультам для синхронизации
         socket.emit('init-remote-data', { history: session.alertHistory });
-        
         session.broadcastTime();
     });
 
+    // Обработчик обновления настроек без перезапуска таймера
     socket.on('update-settings', (config) => {
         if (!userId) return; const session = getSession(userId);
         session.timerState.settings = config;
         session.timerState.settings.originalRouletteSlots = [...(config.rouletteSlots || [])];
         session.emit('settings-updated', config);
+        
+        // Принудительно рассылаем обновленное состояние всем клиентам сразу
+        session.broadcastTime();
+        session.broadcastStatus();
     });
 
     socket.on('start-timer', (config) => {
